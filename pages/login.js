@@ -1,131 +1,161 @@
 import { useState } from 'react';
+import Head from 'next/head';
 import { supabase } from '../lib/supabaseClient';
-import { Lock, Mail, ArrowRight } from 'lucide-react';
-import { useRouter } from 'next/router'; // Serve per cambiare pagina
+import { useRouter } from 'next/router';
+import { FileText, AlertCircle, X, CheckCircle } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  
+  // Stati per la Modal di Recupero
+  const [showRecoverModal, setShowRecoverModal] = useState(false);
+  const [recoverEmail, setRecoverEmail] = useState('');
+  const [recoverLoading, setRecoverLoading] = useState(false);
+  const [recoverStatus, setRecoverStatus] = useState({ type: '', msg: '' });
+
   const router = useRouter();
+  const favicon = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z'/><polyline points='14 2 14 8 20 8'/></svg>";
 
-  // 1. Funzione per gestire l'accesso
   const handleLogin = async (e) => {
-    e.preventDefault(); // Evita che la pagina si ricarichi
+    e.preventDefault();
     setLoading(true);
-
-    // Controllo se l'agente è attivo nel database prima di farlo entrare
-    const { data: profilo, error: errorProfilo } = await supabase
-      .from('profiles')
-      .select('attivo')
-      .eq('email', email)
-      .single();
-
-    if (profilo && !profilo.attivo) {
-      alert("Il tuo account è stato disabilitato dall'amministratore.");
-      setLoading(false);
-      return;
-    }
-
-    // Login effettivo
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      alert("Errore: Credenziali non valide o utente non trovato.");
-      setLoading(false);
-    } else {
-      // Successo! Mandiamo l'utente alla dashboard universale
-      router.push('/dashboard');
-    }
+    setErrorMsg('');
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setErrorMsg('Credenziali non valide');
+    else router.push('/dashboard');
+    setLoading(false);
   };
 
-  // 2. Funzione per il Primo Accesso (Reset Password)
-  const handlePrimoAccesso = async () => {
-    if (!email) {
-      alert("Inserisci la tua email aziendale nel campo sopra per ricevere il link di attivazione.");
-      return;
-    }
-    
-    // Verifica se l'email esiste tra i profili creati dall'admin
-    const { data: esiste } = await supabase.from('profiles').select('email').eq('email', email).single();
-    
-    if (!esiste) {
-      alert("Questa email non risulta registrata. Contatta l'amministratore.");
+  const handleRecoverPassword = async (e) => {
+    e.preventDefault();
+    setRecoverLoading(true);
+    setRecoverStatus({ type: '', msg: '' });
+
+    // 1. Verifichiamo se l'email esiste ed è attiva nel nostro database
+    const { data: profilo, error: dbError } = await supabase
+      .from('profiles')
+      .select('attivo')
+      .eq('email', recoverEmail.toLowerCase().trim())
+      .maybeSingle();
+
+    if (!profilo || !profilo.attivo) {
+      setRecoverStatus({ type: 'error', msg: 'Questa email non è abilitata.' });
+      setRecoverLoading(false);
       return;
     }
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    // 2. Se attiva, inviamo la mail di recupero password
+    const { error: authError } = await supabase.auth.resetPasswordForEmail(recoverEmail, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
 
-    if (error) alert(error.message);
-    else alert("Controlla la tua email! Ti abbiamo inviato il link per impostare la tua password.");
+    if (authError) {
+      setRecoverStatus({ type: 'error', msg: 'Errore durante l\'invio: ' + authError.message });
+    } else {
+      setRecoverStatus({ type: 'success', msg: 'Ti abbiamo inviato una mail con un link per impostare la tua password.' });
+    }
+    setRecoverLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl shadow-slate-200/50 p-10 border border-slate-100">
-        <div className="mb-10 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg shadow-blue-200">
-            <Lock className="text-white w-8 h-8" />
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+      <Head>
+        <title>Contratti | Login</title>
+        <link rel="icon" href={favicon} />
+      </Head>
+
+      <div className="w-full max-w-md">
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-10">
+          <div className="bg-blue-600 p-4 rounded-3xl shadow-xl shadow-blue-200 mb-4">
+            <FileText className="text-white" size={40} />
           </div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Area Agenti</h1>
-          <p className="text-slate-500 mt-2 font-medium">Gestione Contratti Digitale</p>
+          <h1 className="text-3xl font-bold text-slate-900">Contratti</h1>
         </div>
 
-        {/* AGGIUNTO: onSubmit alla form */}
-        <form className="space-y-6" onSubmit={handleLogin}>
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2 ml-1">Email Aziendale</label>
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-              <input 
-                type="email" 
-                required
-                placeholder="nome@azienda.it"
-                className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all outline-none text-slate-900 placeholder:text-slate-400"
-                onChange={e => setEmail(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2 ml-1">Password</label>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-              <input 
-                type="password" 
-                required
-                placeholder="••••••••"
-                className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all outline-none text-slate-900 placeholder:text-slate-400"
-                onChange={e => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
+        {/* Form Login */}
+        <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100">
+          <form onSubmit={handleLogin} className="space-y-4">
+            <input 
+              type="email" placeholder="Email" required 
+              className="w-full p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              value={email} onChange={(e) => setEmail(e.target.value)}
+            />
+            <input 
+              type="password" placeholder="Password" required 
+              className="w-full p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              value={password} onChange={(e) => setPassword(e.target.value)}
+            />
+            {errorMsg && <div className="text-red-500 text-sm flex items-center gap-2"><AlertCircle size={16}/>{errorMsg}</div>}
+            
+            <button 
+              disabled={loading}
+              className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-blue-600 transition-all"
+            >
+              {loading ? 'Accesso in corso...' : 'Accedi'}
+            </button>
+          </form>
 
           <button 
-            type="submit" 
-            disabled={loading}
-            className="w-full bg-slate-900 hover:bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-xl shadow-slate-200 hover:shadow-blue-200 transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
+            onClick={() => { setShowRecoverModal(true); setRecoverStatus({type:'', msg:''}); }}
+            className="w-full mt-6 text-sm font-medium text-blue-600 hover:text-blue-700 transition-all"
           >
-            {loading ? 'Accesso in corso...' : 'Entra nel portale'}
-            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-          </button>
-        </form>
-
-        <div className="mt-8 pt-8 border-t border-slate-50">
-          {/* AGGIUNTO: onClick al bottone primo accesso */}
-          <button 
-            onClick={handlePrimoAccesso}
-            className="w-full text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-          >
-            Primo accesso? Configura la tua password
+            Ottieni o recupera la password
           </button>
         </div>
       </div>
+
+      {/* Modal Recupero Password */}
+      {showRecoverModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-slate-800">Recupera Password</h2>
+              <button onClick={() => setShowRecoverModal(false)} className="text-slate-400 hover:text-slate-600 bg-slate-100 p-2 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+
+            {recoverStatus.type === 'success' ? (
+              <div className="text-center space-y-4">
+                <div className="flex justify-center text-green-500"><CheckCircle size={60} /></div>
+                <p className="text-slate-600 leading-relaxed">{recoverStatus.msg}</p>
+                <button 
+                  onClick={() => setShowRecoverModal(false)}
+                  className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl"
+                >
+                  Torna al login
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleRecoverPassword} className="space-y-4">
+                <p className="text-slate-500 text-sm">Inserisci la tua email per ricevere il link di configurazione password.</p>
+                <input 
+                  type="email" placeholder="La tua email" required 
+                  className="w-full p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500"
+                  value={recoverEmail} onChange={(e) => setRecoverEmail(e.target.value)}
+                />
+                
+                {recoverStatus.type === 'error' && (
+                  <div className="p-4 bg-red-50 text-red-600 rounded-xl flex items-center gap-2 text-sm font-medium">
+                    <AlertCircle size={18} /> {recoverStatus.msg}
+                  </div>
+                )}
+
+                <button 
+                  type="submit" disabled={recoverLoading}
+                  className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-blue-600 transition-all shadow-lg shadow-slate-200"
+                >
+                  {recoverLoading ? 'Verifica in corso...' : 'Invia Link'}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
