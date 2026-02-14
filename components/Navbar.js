@@ -44,7 +44,7 @@ export default function Navbar() {
         {/* Voce visibile SOLO agli Admin */}
         {role === 'admin' && (
           <a href="/admin/agenti" className="flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition-all text-slate-300 hover:text-white border-l-2 border-transparent hover:border-blue-500">
-            <Users size={20} /> Agenti (Admin)
+            <Users size={20} /> Agenti
           </a>
         )}
 
