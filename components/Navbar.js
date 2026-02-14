@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { Users, FileText, LogOut, LayoutDashboard, UserSquare2 } from 'lucide-react'; 
+import { Users, FileText, LogOut, LayoutDashboard, UserSquare2 } from 'lucide-react';
 import { useRouter } from 'next/router';
 
 export default function Navbar() {
@@ -50,7 +50,7 @@ export default function Navbar() {
 
         {/* Voci visibili a tutti */}
         <a href="/clienti" className="flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition-all text-slate-300 hover:text-white">
-          <UserGroup size={20} /> Clienti
+          <UserSquare2 size={20} /> Clienti
         </a>
         <a href="/contratti" className="flex items-center gap-3 p-3 hover:bg-slate-800 rounded-xl transition-all text-slate-300 hover:text-white">
           <FileText size={20} /> Contratti

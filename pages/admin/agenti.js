@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import Navbar from '../../components/Navbar';
-import { UserPlus, Shield, User, Mail, Trash2, Ban, CheckCircle } from 'lucide-react';
+import { UserPlus, Shield, User, Mail, Trash2, Ban, CheckCircle, Users } from 'lucide-react';
 
 export default function GestioneAgenti() {
   const [agenti, setAgenti] = useState([]);
