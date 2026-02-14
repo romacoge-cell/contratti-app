@@ -5,13 +5,21 @@ import { UserPlus, CheckCircle, Ban, Users, AlertCircle, Edit2, XCircle, Plus } 
 
 export default function GestioneAgenti() {
   const [agenti, setAgenti] = useState([]);
-  const [showForm, setShowForm] = useState(false); // Stato per mostrare/nascondere il form
+  const [currentUser, setCurrentUser] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [isEditing, setIsEditing] = useState(false); // Nuovo: capisce se stiamo modificando
+  const [editingId, setEditingId] = useState(null); // Nuovo: ID dell'agente in modifica
   const [form, setForm] = useState({ nome: '', cognome: '', email: '', role: 'agente' });
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
-    fetchAgenti();
+    const getInitialData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+      fetchAgenti();
+    };
+    getInitialData();
   }, []);
 
   async function fetchAgenti() {
@@ -19,33 +27,81 @@ export default function GestioneAgenti() {
     setAgenti(data || []);
   }
 
-  async function aggiungiAgente(e) {
+  // Funzione per preparare il form alla modifica
+  function handleEdit(agente) {
+    setForm({
+      nome: agente.nome,
+      cognome: agente.cognome,
+      email: agente.email,
+      role: agente.role
+    });
+    setEditingId(agente.id);
+    setIsEditing(true);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function salvaAgente(e) {
     e.preventDefault();
     setLoading(true);
     setErrorMsg('');
 
-    const { data: esiste } = await supabase.from('profiles').select('email').eq('email', form.email.toLowerCase().trim()).maybeSingle();
-    if (esiste) {
-      setErrorMsg('Questa email è già associata a un agente.');
-      setLoading(false);
-      return;
-    }
+    const emailLimpida = form.email.toLowerCase().trim();
 
-    const { error } = await supabase.from('profiles').insert([{ ...form, email: form.email.toLowerCase().trim(), attivo: true }]);
+    if (isEditing) {
+      // LOGICA MODIFICA
+      const { error } = await supabase
+        .from('profiles')
+        .update({ ...form, email: emailLimpida })
+        .eq('id', editingId);
 
-    if (error) {
-      setErrorMsg('Errore: ' + error.message);
+      if (error) {
+        setErrorMsg('Errore durante la modifica: ' + error.message);
+      } else {
+        resetForm();
+        fetchAgenti();
+      }
     } else {
-      setForm({ nome: '', cognome: '', email: '', role: 'agente' });
-      setShowForm(false);
-      fetchAgenti();
+      // LOGICA NUOVO INSERIMENTO
+      const { data: esiste } = await supabase.from('profiles').select('email').eq('email', emailLimpida).maybeSingle();
+      if (esiste) {
+        setErrorMsg('Questa email è già associata a un agente.');
+        setLoading(false);
+        return;
+      }
+
+      const { error } = await supabase.from('profiles').insert([{ ...form, email: emailLimpida, attivo: true }]);
+      if (error) {
+        setErrorMsg('Errore: ' + error.message);
+      } else {
+        resetForm();
+        fetchAgenti();
+      }
     }
     setLoading(false);
   }
 
+  function resetForm() {
+    setForm({ nome: '', cognome: '', email: '', role: 'agente' });
+    setShowForm(false);
+    setIsEditing(false);
+    setEditingId(null);
+    setErrorMsg('');
+  }
+
   async function toggleStato(id, statoAttuale) {
-    await supabase.from('profiles').update({ attivo: !statoAttuale }).eq('id', id);
-    fetchAgenti();
+    // PROTEZIONE: Non bloccare se stessi
+    if (id === currentUser?.id) {
+      alert("Non puoi disabilitare il tuo stesso account amministratore.");
+      return;
+    }
+
+    const { error } = await supabase.from('profiles').update({ attivo: !statoAttuale }).eq('id', id);
+    if (error) {
+      alert("Errore: " + error.message);
+    } else {
+      fetchAgenti();
+    }
   }
 
   return (
@@ -55,7 +111,6 @@ export default function GestioneAgenti() {
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-slate-900">Gestione Team Agenti</h1>
           
-          {/* Pulsante per aprire il form */}
           {!showForm && (
             <button 
               onClick={() => setShowForm(true)}
@@ -66,19 +121,19 @@ export default function GestioneAgenti() {
           )}
         </div>
 
-        {/* Maschera di inserimento condizionale */}
         {showForm && (
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 mb-10 animate-in fade-in slide-in-from-top-4 duration-300">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800">
-                <UserPlus className="text-blue-600" /> Nuovo Collaboratore
+                {isEditing ? <Edit2 className="text-blue-600" /> : <UserPlus className="text-blue-600" />}
+                {isEditing ? 'Modifica Agente' : 'Nuovo Collaboratore'}
               </h2>
-              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={resetForm} className="text-slate-400 hover:text-slate-600">
                 <XCircle size={24} />
               </button>
             </div>
             
-            <form onSubmit={aggiungiAgente} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <form onSubmit={salvaAgente} className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <input className="p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nome" required value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} />
               <input className="p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" placeholder="Cognome" required value={form.cognome} onChange={e => setForm({...form, cognome: e.target.value})} />
               <input className="p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" type="email" placeholder="Email" required value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
@@ -87,14 +142,13 @@ export default function GestioneAgenti() {
                 <option value="admin">Amministratore</option>
               </select>
               <button type="submit" disabled={loading} className="md:col-span-4 bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-blue-600 transition-all">
-                {loading ? 'Salvataggio...' : 'Conferma Inserimento'}
+                {loading ? 'Salvataggio...' : isEditing ? 'Aggiorna Dati' : 'Conferma Inserimento'}
               </button>
             </form>
             {errorMsg && <div className="mt-4 p-4 bg-red-50 text-red-600 rounded-xl flex items-center gap-2 border border-red-100"><AlertCircle size={20} /> {errorMsg}</div>}
           </div>
         )}
 
-        {/* Lista Agenti con Pulsanti Azione */}
         <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
           <table className="w-full text-left">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-widest">
@@ -117,16 +171,25 @@ export default function GestioneAgenti() {
                     }
                   </td>
                   <td className="p-6 text-right flex justify-end gap-2">
-                    {/* Tasto Modifica */}
-                    <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Modifica">
+                    <button 
+                      onClick={() => handleEdit(agente)}
+                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" 
+                      title="Modifica"
+                    >
                       <Edit2 size={18} />
                     </button>
                     
-                    {/* Tasto Switch Stato (Abilita/Disabilita) */}
                     <button 
                       onClick={() => toggleStato(agente.id, agente.attivo)}
-                      className={`p-2 rounded-lg transition-all ${agente.attivo ? 'text-slate-400 hover:text-red-600 hover:bg-red-50' : 'text-slate-400 hover:text-green-600 hover:bg-green-50'}`}
-                      title={agente.attivo ? "Disabilita" : "Abilita"}
+                      disabled={agente.id === currentUser?.id}
+                      className={`p-2 rounded-lg transition-all ${
+                        agente.id === currentUser?.id 
+                        ? 'opacity-20 cursor-not-allowed' 
+                        : agente.attivo 
+                          ? 'text-slate-400 hover:text-red-600 hover:bg-red-50' 
+                          : 'text-slate-400 hover:text-green-600 hover:bg-green-50'
+                      }`}
+                      title={agente.id === currentUser?.id ? "Account attuale" : (agente.attivo ? "Disabilita" : "Abilita")}
                     >
                       {agente.attivo ? <Ban size={18} /> : <CheckCircle size={18} />}
                     </button>
