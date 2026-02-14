@@ -1,52 +1,61 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { Lock, Mail, ArrowRight } from 'lucide-react'; // Icone professionali
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Funzione per il Login normale
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    // Controllo se l'agente è attivo prima di loggare
-    const { data: profilo } = await supabase.from('profiles').select('attivo').eq('email', email).single();
-    
-    if (profilo && !profilo.attivo) {
-      alert("Account disabilitato. Contatta l'amministratore.");
-      setLoading(false);
-      return;
-    }
-
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) alert(error.message);
-    setLoading(false);
-  };
-
-  // Funzione per l'Agente che deve impostare la password la prima volta
-  const handlePrimoAccesso = async () => {
-    if (!email) { alert("Inserisci l'email per ricevere il link"); return; }
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://tua-app.vercel.app/reset-password',
-    });
-    if (error) alert(error.message);
-    else alert("Controlla l'email: ti abbiamo inviato il link per impostare la password.");
-  };
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 p-4">
-      <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl">
-        <h1 className="text-2xl font-bold text-center mb-6">Gestionale Contratti</h1>
-        <form onSubmit={handleLogin} className="space-y-4">
-          <input type="email" placeholder="Email" className="w-full p-3 border rounded-lg" onChange={e => setEmail(e.target.value)} />
-          <input type="password" placeholder="Password" className="w-full p-3 border rounded-lg" onChange={e => setPassword(e.target.value)} />
-          <button className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">Accedi</button>
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl shadow-slate-200/50 p-10 border border-slate-100">
+        <div className="mb-10 text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg shadow-blue-200">
+            <Lock className="text-white w-8 h-8" />
+          </div>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Area Agenti</h1>
+          <p className="text-slate-500 mt-2 font-medium">Gestione Contratti Digitale</p>
+        </div>
+
+        <form className="space-y-6">
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2 ml-1">Email Aziendale</label>
+            <div className="relative">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+              <input 
+                type="email" 
+                placeholder="nome@azienda.it"
+                className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all outline-none text-slate-900 placeholder:text-slate-400"
+                onChange={e => setEmail(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2 ml-1">Password</label>
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+              <input 
+                type="password" 
+                placeholder="••••••••"
+                className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all outline-none text-slate-900 placeholder:text-slate-400"
+                onChange={e => setPassword(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <button className="w-full bg-slate-900 hover:bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-xl shadow-slate-200 hover:shadow-blue-200 transition-all flex items-center justify-center gap-2 group">
+            {loading ? 'Accesso...' : 'Entra nel portale'}
+            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+          </button>
         </form>
-        <button onClick={handlePrimoAccesso} className="w-full mt-4 text-sm text-blue-600 hover:underline">
-          Primo accesso o password dimenticata?
-        </button>
+
+        <div className="mt-8 pt-8 border-t border-slate-50">
+          <button className="w-full text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors">
+            Primo accesso? Configura la tua password
+          </button>
+        </div>
       </div>
     </div>
   );
