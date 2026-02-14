@@ -46,18 +46,51 @@ export default function GestioneAgenti() {
   async function salvaAgente(e) {
     e.preventDefault();
     setLoading(true);
+    setErrorMsg('');
     const emailLimpa = form.email.toLowerCase().trim();
 
     if (isEditing) {
+      // MODIFICA: Aggiorna solo i dati del profilo esistente
       const { error } = await supabase.from('profiles').update({ ...form, email: emailLimpa }).eq('id', editingId);
       if (error) setErrorMsg(error.message);
       else { setShowModal(false); fetchAgenti(); }
     } else {
+      // NUOVO AGENTE: 
+      // 1. Verifichiamo se esiste già nel database dei profili
       const { data: esiste } = await supabase.from('profiles').select('email').eq('email', emailLimpa).maybeSingle();
-      if (esiste) { setErrorMsg('Email già presente.'); setLoading(false); return; }
-      const { error } = await supabase.from('profiles').insert([{ ...form, email: emailLimpa, attivo: true }]);
-      if (error) setErrorMsg(error.message);
-      else { setShowModal(false); fetchAgenti(); }
+      if (esiste) {
+        setErrorMsg('Questa email è già registrata nel sistema.');
+        setLoading(false);
+        return;
+      }
+
+      // 2. Usiamo la funzione di invito di Supabase Auth
+      // Nota: Questo invia la mail e crea l'utente in Authentication > Users
+      const { data: authData, error: authError } = await supabase.auth.admin.inviteUserByEmail(emailLimpa, {
+        redirectTo: `${window.location.origin}/reset-password`,
+        data: { nome: form.nome, cognome: form.cognome } // Metadati opzionali
+      });
+
+      if (authError) {
+        // Se ricevi errore "401 Unauthorized" qui, significa che devi usare la Service Role Key 
+        // o, più semplicemente per il tuo caso, creare l'utente e mandargli il reset.
+        setErrorMsg("Errore creazione account: " + authError.message);
+      } else {
+        // 3. Creiamo la riga nella tabella profiles usando l'ID appena generato
+        const { error: profError } = await supabase.from('profiles').insert([
+          { 
+            id: authData.user.id, // Colleghiamo l'ID di Authentication al profilo
+            nome: form.nome, 
+            cognome: form.cognome, 
+            email: emailLimpa, 
+            role: form.role,
+            attivo: true 
+          }
+        ]);
+
+        if (profError) setErrorMsg(profError.message);
+        else { setShowModal(false); fetchAgenti(); }
+      }
     }
     setLoading(false);
   }
@@ -100,15 +133,21 @@ export default function GestioneAgenti() {
                   <option value="agente">Agente</option>
                   <option value="admin">Amministratore</option>
                 </select>
+                
+                {/* Nota informativa */}
+                {!isEditing && <p className="text-[10px] text-slate-400 px-1">Al salvataggio verrà inviata una mail di invito per impostare la password.</p>}
+                
                 {errorMsg && <p className="text-red-500 text-sm font-medium">{errorMsg}</p>}
-                <button type="submit" className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-blue-600 transition-all shadow-lg">
-                  {loading ? 'Salvataggio...' : 'Conferma'}
+                
+                <button type="submit" disabled={loading} className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-blue-600 transition-all shadow-lg">
+                  {loading ? 'Elaborazione...' : 'Conferma e Invia Invito'}
                 </button>
               </form>
             </div>
           </div>
         )}
 
+        {/* Tabella (Invariata) */}
         <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
           <table className="w-full text-left">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-widest border-b border-slate-100">
