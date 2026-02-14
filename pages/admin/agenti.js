@@ -43,43 +43,47 @@ export default function GestioneAgenti() {
     setShowModal(true);
   }
 
-  async function salvaAgente(e) {
+async function salvaAgente(e) {
     e.preventDefault();
     setLoading(true);
     setErrorMsg('');
     const emailLimpa = form.email.toLowerCase().trim();
 
     if (isEditing) {
-      // MODIFICA: Aggiorna solo i dati del profilo esistente
       const { error } = await supabase.from('profiles').update({ ...form, email: emailLimpa }).eq('id', editingId);
       if (error) setErrorMsg(error.message);
       else { setShowModal(false); fetchAgenti(); }
     } else {
-      // NUOVO AGENTE: 
-      // 1. Verifichiamo se esiste già nel database dei profili
+      // 1. Verifichiamo se l'email esiste già nei profili
       const { data: esiste } = await supabase.from('profiles').select('email').eq('email', emailLimpa).maybeSingle();
       if (esiste) {
-        setErrorMsg('Questa email è già registrata nel sistema.');
+        setErrorMsg('Questa email è già registrata.');
         setLoading(false);
         return;
       }
 
-      // 2. Usiamo la funzione di invito di Supabase Auth
-      // Nota: Questo invia la mail e crea l'utente in Authentication > Users
-      const { data: authData, error: authError } = await supabase.auth.admin.inviteUserByEmail(emailLimpa, {
-        redirectTo: `${window.location.origin}/reset-password`,
-        data: { nome: form.nome, cognome: form.cognome } // Metadati opzionali
+      // 2. Creiamo l'account con signUp (Metodo sicuro lato client)
+      // Generiamo una password casuale temporanea (l'utente la cambierà col reset)
+      const tempPassword = Math.random().toString(36).slice(-12);
+      
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: emailLimpa,
+        password: tempPassword,
+        options: {
+          emailRedirectTo: `${window.location.origin}/reset-password`,
+          data: { nome: form.nome, cognome: form.cognome }
+        }
       });
 
       if (authError) {
-        // Se ricevi errore "401 Unauthorized" qui, significa che devi usare la Service Role Key 
-        // o, più semplicemente per il tuo caso, creare l'utente e mandargli il reset.
-        setErrorMsg("Errore creazione account: " + authError.message);
-      } else {
-        // 3. Creiamo la riga nella tabella profiles usando l'ID appena generato
-        const { error: profError } = await supabase.from('profiles').insert([
+        setErrorMsg("Errore: " + authError.message);
+      } else if (authData.user) {
+        // 3. Creiamo il profilo (Supabase di solito lo fa via Trigger, ma noi lo facciamo manuale per sicurezza)
+        // Se hai già un trigger nel database, questa riga potrebbe fallire per 'duplicate key'.
+        // In quel caso basta un update.
+        const { error: profError } = await supabase.from('profiles').upsert([
           { 
-            id: authData.user.id, // Colleghiamo l'ID di Authentication al profilo
+            id: authData.user.id, 
             nome: form.nome, 
             cognome: form.cognome, 
             email: emailLimpa, 
@@ -89,7 +93,11 @@ export default function GestioneAgenti() {
         ]);
 
         if (profError) setErrorMsg(profError.message);
-        else { setShowModal(false); fetchAgenti(); }
+        else { 
+          alert("Agente censito! Gli è stata inviata una mail di conferma.");
+          setShowModal(false); 
+          fetchAgenti(); 
+        }
       }
     }
     setLoading(false);
