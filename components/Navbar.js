@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { Users, UserGroup, FileText, LogOut, LayoutDashboard } from 'lucide-react';
+import { Users, FileText, LogOut, LayoutDashboard, UserSquare2 } from 'lucide-react'; 
 import { useRouter } from 'next/router';
 
 export default function Navbar() {
