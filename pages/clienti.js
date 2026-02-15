@@ -23,6 +23,24 @@ const validaPIVA = (piva) => {
   return s % 10 === 0;
 };
 
+// --- ALGORITMO VALIDAZIONE IBAN (IT) ---
+const validaIBAN = (iban) => {
+  if (!iban) return true;
+  const cleanIban = iban.replace(/\s/g, '').toUpperCase();
+  if (!/^IT[0-9]{2}[A-Z][0-9]{10}[A-Z0-9]{12}$/.test(cleanIban)) return false;
+  const rearranged = cleanIban.slice(4) + cleanIban.slice(0, 4);
+  const numeric = rearranged.split('').map(char => {
+    const code = char.charCodeAt(0);
+    return code >= 65 && code <= 90 ? (code - 55).toString() : char;
+  }).join('');
+  let remainder = numeric;
+  while (remainder.length > 2) {
+    const block = remainder.slice(0, 9);
+    remainder = (parseInt(block, 10) % 97) + remainder.slice(block.length);
+  }
+  return parseInt(remainder, 10) % 97 === 1;
+};
+
 export default function GestioneClienti() {
   const [clienti, setClienti] = useState([]);
   const [agenti, setAgenti] = useState([]);
@@ -30,10 +48,8 @@ export default function GestioneClienti() {
   const [view, setView] = useState('list');
   const [loading, setLoading] = useState(false);
   
-  // Filtri ricerca
   const [filtri, setFiltri] = useState({ ragione_sociale: '', sdi: '', localita: '', provincia: '', agente_id: '' });
 
-  // Stato Form
   const [form, setForm] = useState({
     ragione_sociale: '', via: '', civico: '', localita: '', provincia: '', cap: '',
     rappresentante_nome: '', rappresentante_cognome: '', codice_altuofianco: '',
@@ -90,27 +106,24 @@ export default function GestioneClienti() {
     e.preventDefault();
     setLoading(true);
     const finalAgenteId = userProfile.role === 'admin' ? form.agente_id : userProfile.id;
-    const clienteData = { ...form, agente_id: finalAgenteId };
-
-    let clienteId = editingId;
-    if (editingId) {
-      await supabase.from('clienti').update(clienteData).eq('id', editingId);
-    } else {
-      const { data, error } = await supabase.from('clienti').insert([clienteData]).select();
-      if (!error) clienteId = data[0].id;
+    const { data, error } = await supabase.from('clienti').upsert({ ...form, id: editingId || undefined, agente_id: finalAgenteId }).select();
+    
+    if (!error && data) {
+      const clienteId = data[0].id;
+      if (referenti.length > 0) {
+        const referentiDaSalvare = referenti.map(r => ({ ...r, cliente_id: clienteId, agente_id: finalAgenteId }));
+        await supabase.from('clienti_referenti').upsert(referentiDaSalvare);
+      }
     }
-
-    if (referenti.length > 0) {
-      const referentiDaSalvare = referenti.map(r => ({ ...r, cliente_id: clienteId, agente_id: finalAgenteId }));
-      await supabase.from('clienti_referenti').upsert(referentiDaSalvare);
-    }
-
     setLoading(false);
     setView('list');
     fetchClienti();
   };
 
   const isPivaValida = validaPIVA(form.sdi);
+  const isIbanValido = validaIBAN(form.iban);
+  const canSave = !loading && isPivaValida && isIbanValido && (userProfile?.role !== 'admin' || form.agente_id !== '');
+
   const filteredClienti = clienti.filter(c => 
     c.ragione_sociale.toLowerCase().includes(filtri.ragione_sociale.toLowerCase()) &&
     c.sdi.toLowerCase().includes(filtri.sdi.toLowerCase()) &&
@@ -129,7 +142,7 @@ export default function GestioneClienti() {
           <>
             <div className="flex justify-between items-center mb-10">
               <h1 className="text-3xl font-bold text-slate-900">Anagrafica Clienti</h1>
-              <button onClick={handleNuovo} className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-blue-700 shadow-lg shadow-blue-200">
+              <button onClick={handleNuovo} className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-blue-700 shadow-lg">
                 <Plus size={20} /> Nuovo Cliente
               </button>
             </div>
@@ -189,7 +202,6 @@ export default function GestioneClienti() {
             </div>
 
             <div className="space-y-8">
-              {/* ASSEGNAZIONE AGENTE (SOLO PER ADMIN) */}
               {userProfile?.role === 'admin' && (
                 <div className="bg-blue-50 p-8 rounded-[2.5rem] border border-blue-100 shadow-sm">
                   <div className="flex items-center gap-3 mb-4 text-blue-700">
@@ -203,7 +215,6 @@ export default function GestioneClienti() {
                 </div>
               )}
 
-              {/* ANAGRAFICA */}
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
                 <div className="flex items-center gap-3 mb-6 text-blue-600">
                   <Building2 size={24} />
@@ -218,11 +229,9 @@ export default function GestioneClienti() {
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Partita IVA</label>
                     <input 
                       className={`w-full p-4 rounded-2xl mt-1 outline-none border-2 transition-all ${form.sdi && !isPivaValida ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-transparent focus:border-blue-500'}`}
-                      value={form.sdi} 
-                      maxLength={11}
-                      onChange={e => setForm({...form, sdi: e.target.value.replace(/\D/g, '')})} 
+                      value={form.sdi} maxLength={11} onChange={e => setForm({...form, sdi: e.target.value.replace(/\D/g, '')})} 
                     />
-                    {form.sdi && !isPivaValida && <p className="text-red-500 text-[10px] font-bold mt-1 ml-2 uppercase flex items-center gap-1"><AlertCircle size={12}/> Partita IVA Errata</p>}
+                    {form.sdi && !isPivaValida && <p className="text-red-500 text-[10px] font-bold mt-1 ml-2 uppercase flex items-center gap-1"><AlertCircle size={12}/> P.IVA Non Valida</p>}
                   </div>
                   <div className="md:col-span-2">
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Indirizzo (Via e Civico)</label>
@@ -238,7 +247,7 @@ export default function GestioneClienti() {
                     </div>
                     <div>
                        <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Cap</label>
-                       <input className="w-[100px] p-4 bg-slate-50 rounded-2xl mt-1 text-center" maxLength={5} value={form.cap} onChange={e => setForm({...form, cap: e.target.value.replace(/\D/g, '')})} />
+                       <input className="w-[100px] p-4 bg-slate-50 rounded-2xl mt-1 text-center font-medium" maxLength={5} value={form.cap} onChange={e => setForm({...form, cap: e.target.value.replace(/\D/g, '')})} />
                     </div>
                     <div>
                        <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Pr.</label>
@@ -260,7 +269,6 @@ export default function GestioneClienti() {
                 </div>
               </div>
 
-              {/* DATI AMMINISTRATIVI */}
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
                 <div className="flex items-center gap-3 mb-6 text-emerald-600">
                   <Landmark size={24} />
@@ -269,7 +277,11 @@ export default function GestioneClienti() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="md:col-span-2">
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">IBAN</label>
-                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 font-mono" value={form.iban} onChange={e => setForm({...form, iban: e.target.value})} />
+                    <input 
+                      className={`w-full p-4 rounded-2xl mt-1 font-mono outline-none border-2 transition-all ${form.iban && !isIbanValido ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-transparent focus:border-blue-500'}`}
+                      value={form.iban} onChange={e => setForm({...form, iban: e.target.value.toUpperCase()})} 
+                    />
+                    {form.iban && !isIbanValido && <p className="text-red-500 text-[10px] font-bold mt-1 ml-2 uppercase flex items-center gap-1"><AlertCircle size={12}/> IBAN Non Valido</p>}
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Banca</label>
@@ -281,24 +293,23 @@ export default function GestioneClienti() {
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Intestatario Conto</label>
-                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1" maxLength={200} value={form.intestatario_conto} onChange={e => setForm({...form, intestatario_conto: e.target.value})} />
+                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1" value={form.intestatario_conto} onChange={e => setForm({...form, intestatario_conto: e.target.value})} />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Tipologia Intestatario</label>
-                    <select className="w-full p-4 bg-slate-50 rounded-2xl mt-1" value={form.tipologia_intestatario} onChange={e => setForm({...form, tipologia_intestatario: e.target.value})}>
+                    <select className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none" value={form.tipologia_intestatario} onChange={e => setForm({...form, tipologia_intestatario: e.target.value})}>
                       <option value="Partita IVA">Partita IVA</option>
                       <option value="Codice Fiscale">Codice Fiscale</option>
                     </select>
                   </div>
                   <div className="p-6 bg-slate-50 rounded-3xl md:col-span-2 grid grid-cols-2 gap-4">
                     <div className="col-span-2 font-bold text-sm text-slate-400 mb-2 uppercase">Dati Debitore</div>
-                    <input className="p-4 bg-white rounded-2xl" placeholder="Nome/Cognome Debitore" value={form.debitore_nome_cognome} onChange={e => setForm({...form, debitore_nome_cognome: e.target.value})} />
-                    <input className="p-4 bg-white rounded-2xl" placeholder="C.F. Debitore" value={form.debitore_cf} onChange={e => setForm({...form, debitore_cf: e.target.value})} />
+                    <input className="p-4 bg-white rounded-2xl outline-none focus:ring-2 focus:ring-blue-100" placeholder="Nome/Cognome Debitore" value={form.debitore_nome_cognome} onChange={e => setForm({...form, debitore_nome_cognome: e.target.value})} />
+                    <input className="p-4 bg-white rounded-2xl outline-none focus:ring-2 focus:ring-blue-100" placeholder="C.F. Debitore" value={form.debitore_cf} onChange={e => setForm({...form, debitore_cf: e.target.value})} />
                   </div>
                 </div>
               </div>
 
-              {/* REFERENTI */}
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
                 <div className="flex justify-between items-center mb-6">
                   <div className="flex items-center gap-3 text-purple-600">
@@ -312,12 +323,12 @@ export default function GestioneClienti() {
                 <div className="space-y-4">
                   {referenti.map((ref, index) => (
                     <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-3 p-4 bg-slate-50 rounded-2xl relative">
-                      <input placeholder="Nome" className="p-3 bg-white rounded-xl" value={ref.nome} onChange={e => { const n = [...referenti]; n[index].nome = e.target.value; setReferenti(n); }} />
-                      <input placeholder="Cognome" className="p-3 bg-white rounded-xl" value={ref.cognome} onChange={e => { const n = [...referenti]; n[index].cognome = e.target.value; setReferenti(n); }} />
-                      <input placeholder="Email" className="p-3 bg-white rounded-xl" value={ref.email} onChange={e => { const n = [...referenti]; n[index].email = e.target.value; setReferenti(n); }} />
-                      <input placeholder="Cellulare" className="p-3 bg-white rounded-xl" value={ref.telefono_cellulare} onChange={e => { const n = [...referenti]; n[index].telefono_cellulare = e.target.value; setReferenti(n); }} />
+                      <input placeholder="Nome" className="p-3 bg-white rounded-xl outline-none" value={ref.nome} onChange={e => { const n = [...referenti]; n[index].nome = e.target.value; setReferenti(n); }} />
+                      <input placeholder="Cognome" className="p-3 bg-white rounded-xl outline-none" value={ref.cognome} onChange={e => { const n = [...referenti]; n[index].cognome = e.target.value; setReferenti(n); }} />
+                      <input placeholder="Email" className="p-3 bg-white rounded-xl outline-none" value={ref.email} onChange={e => { const n = [...referenti]; n[index].email = e.target.value; setReferenti(n); }} />
+                      <input placeholder="Cellulare" className="p-3 bg-white rounded-xl outline-none" value={ref.telefono_cellulare} onChange={e => { const n = [...referenti]; n[index].telefono_cellulare = e.target.value; setReferenti(n); }} />
                       <div className="flex gap-2">
-                        <input placeholder="Fisso" className="flex-1 p-3 bg-white rounded-xl" value={ref.telefono_fisso} onChange={e => { const n = [...referenti]; n[index].telefono_fisso = e.target.value; setReferenti(n); }} />
+                        <input placeholder="Fisso" className="flex-1 p-3 bg-white rounded-xl outline-none" value={ref.telefono_fisso} onChange={e => { const n = [...referenti]; n[index].telefono_fisso = e.target.value; setReferenti(n); }} />
                         <button type="button" onClick={() => setReferenti(referenti.filter((_, i) => i !== index))} className="p-3 text-red-400 hover:text-red-600"><Trash2 size={18} /></button>
                       </div>
                     </div>
@@ -325,16 +336,10 @@ export default function GestioneClienti() {
                 </div>
               </div>
 
-              {/* PULSANTE SALVA */}
               <div className="flex justify-end pt-4">
                 <button 
-                  type="submit" 
-                  disabled={loading || (form.sdi !== '' && !isPivaValida)} 
-                  className={`px-12 py-4 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-xl ${
-                    loading || (form.sdi !== '' && !isPivaValida)
-                    ? 'bg-slate-300 cursor-not-allowed shadow-none'
-                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'
-                  }`}
+                  type="submit" disabled={!canSave}
+                  className={`px-12 py-4 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-xl ${canSave ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200' : 'bg-slate-300 cursor-not-allowed shadow-none'}`}
                 >
                   <Save size={20} /> {loading ? 'Salvataggio...' : 'Salva Cliente'}
                 </button>
