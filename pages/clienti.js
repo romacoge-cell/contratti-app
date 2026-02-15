@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
-import { supabase } from '../../lib/supabaseClient';
-import Navbar from '../../components/Navbar';
+import { supabase } from '../lib/supabaseClient';
+import Navbar from '../components/Navbar';
 import { 
   Plus, Search, Edit2, ArrowLeft, Save, 
   UserPlus, Trash2, Building2, Landmark, Users 
