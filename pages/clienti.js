@@ -7,7 +7,7 @@ import {
   Trash2, Building2, Landmark, Users, User, AlertCircle 
 } from 'lucide-react';
 
-// --- ALGORITMO VALIDAZIONE PARTITA IVA ---
+// --- VALIDAZIONE PARTITA IVA ---
 const validaPIVA = (piva) => {
   if (!piva) return true; 
   if (!/^[0-9]{11}$/.test(piva)) return false;
@@ -23,7 +23,7 @@ const validaPIVA = (piva) => {
   return s % 10 === 0;
 };
 
-// --- ALGORITMO VALIDAZIONE IBAN (IT) ---
+// --- VALIDAZIONE IBAN (IT) ---
 const validaIBAN = (iban) => {
   if (!iban) return true;
   const cleanIban = iban.replace(/\s/g, '').toUpperCase();
@@ -77,8 +77,14 @@ export default function GestioneClienti() {
   }, []);
 
   async function fetchClienti() {
-    const { data } = await supabase.from('clienti').select(`*, profiles:agente_id (nome, cognome)`).order('ragione_sociale');
-    setClienti(data || []);
+    // Sintassi semplificata per il join: risolve l'errore 400 in SELECT
+    const { data, error } = await supabase
+      .from('clienti')
+      .select('*, profiles(nome, cognome)')
+      .order('ragione_sociale');
+    
+    if (error) console.error("Errore fetch:", error);
+    else setClienti(data || []);
   }
 
   const handleEdit = async (cliente) => {
@@ -105,19 +111,41 @@ export default function GestioneClienti() {
   const salvaTutto = async (e) => {
     e.preventDefault();
     setLoading(true);
+
     const finalAgenteId = userProfile.role === 'admin' ? form.agente_id : userProfile.id;
-    const { data, error } = await supabase.from('clienti').upsert({ ...form, id: editingId || undefined, agente_id: finalAgenteId }).select();
+
+    // --- RISOLUZIONE ERRORE 400 PATCH ---
+    // Rimuoviamo i campi "virtuali" (profiles) e metadati (created_at) prima del salvataggio
+    const { profiles, created_at, ...payload } = form;
     
-    if (!error && data) {
+    const clienteData = { 
+      ...payload, 
+      id: editingId || undefined,
+      agente_id: finalAgenteId 
+    };
+
+    const { data, error } = await supabase
+      .from('clienti')
+      .upsert(clienteData)
+      .select();
+    
+    if (error) {
+      alert("Errore salvataggio: " + error.message);
+    } else if (data && data.length > 0) {
       const clienteId = data[0].id;
       if (referenti.length > 0) {
-        const referentiDaSalvare = referenti.map(r => ({ ...r, cliente_id: clienteId, agente_id: finalAgenteId }));
+        // Pulizia anche per i referenti
+        const referentiDaSalvare = referenti.map(({ profiles, created_at, id, ...r }) => ({ 
+          ...r, 
+          cliente_id: clienteId, 
+          agente_id: finalAgenteId 
+        }));
         await supabase.from('clienti_referenti').upsert(referentiDaSalvare);
       }
+      setView('list');
+      fetchClienti();
     }
     setLoading(false);
-    setView('list');
-    fetchClienti();
   };
 
   const isPivaValida = validaPIVA(form.sdi);
@@ -142,7 +170,7 @@ export default function GestioneClienti() {
           <>
             <div className="flex justify-between items-center mb-10">
               <h1 className="text-3xl font-bold text-slate-900">Anagrafica Clienti</h1>
-              <button onClick={handleNuovo} className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-blue-700 shadow-lg">
+              <button onClick={handleNuovo} className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-blue-700 shadow-lg shadow-blue-200">
                 <Plus size={20} /> Nuovo Cliente
               </button>
             </div>
@@ -223,7 +251,7 @@ export default function GestioneClienti() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="md:col-span-2">
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Ragione Sociale</label>
-                    <input required className="w-full p-4 bg-slate-50 rounded-2xl mt-1" value={form.ragione_sociale} onChange={e => setForm({...form, ragione_sociale: e.target.value})} />
+                    <input required className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={form.ragione_sociale} onChange={e => setForm({...form, ragione_sociale: e.target.value})} />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Partita IVA</label>
@@ -236,35 +264,35 @@ export default function GestioneClienti() {
                   <div className="md:col-span-2">
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Indirizzo (Via e Civico)</label>
                     <div className="flex gap-2">
-                      <input className="flex-1 p-4 bg-slate-50 rounded-2xl mt-1" placeholder="Via" value={form.via} onChange={e => setForm({...form, via: e.target.value})} />
-                      <input className="w-24 p-4 bg-slate-50 rounded-2xl mt-1" placeholder="Civ." value={form.civico} onChange={e => setForm({...form, civico: e.target.value})} />
+                      <input className="flex-1 p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Via" value={form.via} onChange={e => setForm({...form, via: e.target.value})} />
+                      <input className="w-24 p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Civ." value={form.civico} onChange={e => setForm({...form, civico: e.target.value})} />
                     </div>
                   </div>
                   <div className="grid grid-cols-3 md:grid-cols-4 gap-2 md:col-span-1">
                     <div className="col-span-2">
                        <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Località</label>
-                       <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1" value={form.localita} onChange={e => setForm({...form, localita: e.target.value})} />
+                       <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={form.localita} onChange={e => setForm({...form, localita: e.target.value})} />
                     </div>
                     <div>
                        <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Cap</label>
-                       <input className="w-[100px] p-4 bg-slate-50 rounded-2xl mt-1 text-center font-medium" maxLength={5} value={form.cap} onChange={e => setForm({...form, cap: e.target.value.replace(/\D/g, '')})} />
+                       <input className="w-[100px] p-4 bg-slate-50 rounded-2xl mt-1 text-center font-medium outline-none focus:ring-2 focus:ring-blue-500" maxLength={5} value={form.cap} onChange={e => setForm({...form, cap: e.target.value.replace(/\D/g, '')})} />
                     </div>
                     <div>
                        <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Pr.</label>
-                       <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 text-center" maxLength={2} value={form.provincia} onChange={e => setForm({...form, provincia: e.target.value.toUpperCase()})} />
+                       <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 text-center outline-none focus:ring-2 focus:ring-blue-500" maxLength={2} value={form.provincia} onChange={e => setForm({...form, provincia: e.target.value.toUpperCase()})} />
                     </div>
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Rappresentante (Nome)</label>
-                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1" value={form.rappresentante_nome} onChange={e => setForm({...form, rappresentante_nome: e.target.value})} />
+                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={form.rappresentante_nome} onChange={e => setForm({...form, rappresentante_nome: e.target.value})} />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Rappresentante (Cognome)</label>
-                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1" value={form.rappresentante_cognome} onChange={e => setForm({...form, rappresentante_cognome: e.target.value})} />
+                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={form.rappresentante_cognome} onChange={e => setForm({...form, rappresentante_cognome: e.target.value})} />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase text-blue-600">Codice Altuofianco</label>
-                    <input className="w-full p-4 bg-blue-50 border border-blue-100 rounded-2xl mt-1" maxLength={10} value={form.codice_altuofianco} onChange={e => setForm({...form, codice_altuofianco: e.target.value})} />
+                    <input className="w-full p-4 bg-blue-50 border border-blue-100 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" maxLength={10} value={form.codice_altuofianco} onChange={e => setForm({...form, codice_altuofianco: e.target.value})} />
                   </div>
                 </div>
               </div>
@@ -285,27 +313,27 @@ export default function GestioneClienti() {
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Banca</label>
-                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1" value={form.banca} onChange={e => setForm({...form, banca: e.target.value})} />
+                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={form.banca} onChange={e => setForm({...form, banca: e.target.value})} />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">PEC</label>
-                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1" value={form.pec} onChange={e => setForm({...form, pec: e.target.value})} />
+                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={form.pec} onChange={e => setForm({...form, pec: e.target.value})} />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Intestatario Conto</label>
-                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1" value={form.intestatario_conto} onChange={e => setForm({...form, intestatario_conto: e.target.value})} />
+                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={form.intestatario_conto} onChange={e => setForm({...form, intestatario_conto: e.target.value})} />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Tipologia Intestatario</label>
-                    <select className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none" value={form.tipologia_intestatario} onChange={e => setForm({...form, tipologia_intestatario: e.target.value})}>
+                    <select className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={form.tipologia_intestatario} onChange={e => setForm({...form, tipologia_intestatario: e.target.value})}>
                       <option value="Partita IVA">Partita IVA</option>
                       <option value="Codice Fiscale">Codice Fiscale</option>
                     </select>
                   </div>
                   <div className="p-6 bg-slate-50 rounded-3xl md:col-span-2 grid grid-cols-2 gap-4">
                     <div className="col-span-2 font-bold text-sm text-slate-400 mb-2 uppercase">Dati Debitore</div>
-                    <input className="p-4 bg-white rounded-2xl outline-none focus:ring-2 focus:ring-blue-100" placeholder="Nome/Cognome Debitore" value={form.debitore_nome_cognome} onChange={e => setForm({...form, debitore_nome_cognome: e.target.value})} />
-                    <input className="p-4 bg-white rounded-2xl outline-none focus:ring-2 focus:ring-blue-100" placeholder="C.F. Debitore" value={form.debitore_cf} onChange={e => setForm({...form, debitore_cf: e.target.value})} />
+                    <input className="p-4 bg-white rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nome/Cognome Debitore" value={form.debitore_nome_cognome} onChange={e => setForm({...form, debitore_nome_cognome: e.target.value})} />
+                    <input className="p-4 bg-white rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" placeholder="C.F. Debitore" value={form.debitore_cf} onChange={e => setForm({...form, debitore_cf: e.target.value})} />
                   </div>
                 </div>
               </div>
@@ -323,12 +351,12 @@ export default function GestioneClienti() {
                 <div className="space-y-4">
                   {referenti.map((ref, index) => (
                     <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-3 p-4 bg-slate-50 rounded-2xl relative">
-                      <input placeholder="Nome" className="p-3 bg-white rounded-xl outline-none" value={ref.nome} onChange={e => { const n = [...referenti]; n[index].nome = e.target.value; setReferenti(n); }} />
-                      <input placeholder="Cognome" className="p-3 bg-white rounded-xl outline-none" value={ref.cognome} onChange={e => { const n = [...referenti]; n[index].cognome = e.target.value; setReferenti(n); }} />
-                      <input placeholder="Email" className="p-3 bg-white rounded-xl outline-none" value={ref.email} onChange={e => { const n = [...referenti]; n[index].email = e.target.value; setReferenti(n); }} />
-                      <input placeholder="Cellulare" className="p-3 bg-white rounded-xl outline-none" value={ref.telefono_cellulare} onChange={e => { const n = [...referenti]; n[index].telefono_cellulare = e.target.value; setReferenti(n); }} />
+                      <input placeholder="Nome" className="p-3 bg-white rounded-xl outline-none focus:ring-2 focus:ring-purple-100" value={ref.nome} onChange={e => { const n = [...referenti]; n[index].nome = e.target.value; setReferenti(n); }} />
+                      <input placeholder="Cognome" className="p-3 bg-white rounded-xl outline-none focus:ring-2 focus:ring-purple-100" value={ref.cognome} onChange={e => { const n = [...referenti]; n[index].cognome = e.target.value; setReferenti(n); }} />
+                      <input placeholder="Email" className="p-3 bg-white rounded-xl outline-none focus:ring-2 focus:ring-purple-100" value={ref.email} onChange={e => { const n = [...referenti]; n[index].email = e.target.value; setReferenti(n); }} />
+                      <input placeholder="Cellulare" className="p-3 bg-white rounded-xl outline-none focus:ring-2 focus:ring-purple-100" value={ref.telefono_cellulare} onChange={e => { const n = [...referenti]; n[index].telefono_cellulare = e.target.value; setReferenti(n); }} />
                       <div className="flex gap-2">
-                        <input placeholder="Fisso" className="flex-1 p-3 bg-white rounded-xl outline-none" value={ref.telefono_fisso} onChange={e => { const n = [...referenti]; n[index].telefono_fisso = e.target.value; setReferenti(n); }} />
+                        <input placeholder="Fisso" className="flex-1 p-3 bg-white rounded-xl outline-none focus:ring-2 focus:ring-purple-100" value={ref.telefono_fisso} onChange={e => { const n = [...referenti]; n[index].telefono_fisso = e.target.value; setReferenti(n); }} />
                         <button type="button" onClick={() => setReferenti(referenti.filter((_, i) => i !== index))} className="p-3 text-red-400 hover:text-red-600"><Trash2 size={18} /></button>
                       </div>
                     </div>
@@ -339,7 +367,7 @@ export default function GestioneClienti() {
               <div className="flex justify-end pt-4">
                 <button 
                   type="submit" disabled={!canSave}
-                  className={`px-12 py-4 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-xl ${canSave ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200' : 'bg-slate-300 cursor-not-allowed shadow-none'}`}
+                  className={`px-12 py-4 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-xl ${canSave ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200' : 'bg-slate-300 cursor-not-allowed shadow-none text-slate-500'}`}
                 >
                   <Save size={20} /> {loading ? 'Salvataggio...' : 'Salva Cliente'}
                 </button>
