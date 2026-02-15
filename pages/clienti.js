@@ -77,9 +77,48 @@ export default function GestioneClienti() {
     setView('form');
   };
 
-  const salvaTutto = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+const salvaTutto = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+
+  // 1. Determiniamo l'agente corretto
+  const finalAgenteId = userProfile.role === 'admin' ? form.agente_id : userProfile.id;
+
+  // 2. Pulizia dati per evitare Errore 400 e conflitti RLS
+  // Rimuoviamo gli oggetti join (profiles) e le date generate dal DB
+  const { profiles, created_at, updated_at, ...payload } = form;
+  
+  const clienteData = { 
+    ...payload, 
+    agente_id: finalAgenteId,
+    // Sanificazione lunghezze per sicurezza
+    cap: form.cap?.substring(0, 5),
+    provincia: form.provincia?.substring(0, 2).toUpperCase()
+  };
+
+  const { data, error } = await supabase
+    .from('clienti')
+    .upsert(clienteData)
+    .select();
+  
+  if (error) {
+    console.error("Errore dettagliato:", error);
+    alert("Errore salvataggio: " + error.message);
+  } else {
+    // 3. Gestione referenti (se presenti)
+    if (data && data.length > 0 && referenti.length > 0) {
+      const referentiDaSalvare = referenti.map(({ profiles, created_at, ...r }) => ({ 
+        ...r, 
+        cliente_id: data[0].id, 
+        agente_id: finalAgenteId 
+      }));
+      await supabase.from('clienti_referenti').upsert(referentiDaSalvare);
+    }
+    setView('list');
+    fetchClienti();
+  }
+  setLoading(false);
+};
 
     const finalAgenteId = userProfile.role === 'admin' ? form.agente_id : userProfile.id;
 
