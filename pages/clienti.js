@@ -7,6 +7,22 @@ import {
   Trash2, Building2, Landmark, Users, User, AlertCircle 
 } from 'lucide-react';
 
+// --- ALGORITMO VALIDAZIONE PARTITA IVA ---
+const validaPIVA = (piva) => {
+  if (!piva) return true; 
+  if (!/^[0-9]{11}$/.test(piva)) return false;
+  let s = 0;
+  for (let i = 0; i < 11; i++) {
+    let n = parseInt(piva[i]);
+    if ((i + 1) % 2 === 0) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    s += n;
+  }
+  return s % 10 === 0;
+};
+
 export default function GestioneClienti() {
   const [clienti, setClienti] = useState([]);
   const [agenti, setAgenti] = useState([]);
@@ -14,8 +30,10 @@ export default function GestioneClienti() {
   const [view, setView] = useState('list');
   const [loading, setLoading] = useState(false);
   
+  // Filtri ricerca
   const [filtri, setFiltri] = useState({ ragione_sociale: '', sdi: '', localita: '', provincia: '', agente_id: '' });
 
+  // Stato Form
   const [form, setForm] = useState({
     ragione_sociale: '', via: '', civico: '', localita: '', provincia: '', cap: '',
     rappresentante_nome: '', rappresentante_cognome: '', codice_altuofianco: '',
@@ -92,6 +110,7 @@ export default function GestioneClienti() {
     fetchClienti();
   };
 
+  const isPivaValida = validaPIVA(form.sdi);
   const filteredClienti = clienti.filter(c => 
     c.ragione_sociale.toLowerCase().includes(filtri.ragione_sociale.toLowerCase()) &&
     c.sdi.toLowerCase().includes(filtri.sdi.toLowerCase()) &&
@@ -110,7 +129,7 @@ export default function GestioneClienti() {
           <>
             <div className="flex justify-between items-center mb-10">
               <h1 className="text-3xl font-bold text-slate-900">Anagrafica Clienti</h1>
-              <button onClick={handleNuovo} className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-blue-700 shadow-lg">
+              <button onClick={handleNuovo} className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-blue-700 shadow-lg shadow-blue-200">
                 <Plus size={20} /> Nuovo Cliente
               </button>
             </div>
@@ -170,19 +189,21 @@ export default function GestioneClienti() {
             </div>
 
             <div className="space-y-8">
+              {/* ASSEGNAZIONE AGENTE (SOLO PER ADMIN) */}
               {userProfile?.role === 'admin' && (
                 <div className="bg-blue-50 p-8 rounded-[2.5rem] border border-blue-100 shadow-sm">
                   <div className="flex items-center gap-3 mb-4 text-blue-700">
                     <User size={24} />
                     <h3 className="text-lg font-bold">Assegnazione Agente</h3>
                   </div>
-                  <select required className="w-full md:w-1/2 p-4 bg-white border border-blue-200 rounded-2xl outline-none" value={form.agente_id} onChange={e => setForm({...form, agente_id: e.target.value})}>
+                  <select required className="w-full md:w-1/2 p-4 bg-white border border-blue-200 rounded-2xl outline-none font-semibold" value={form.agente_id} onChange={e => setForm({...form, agente_id: e.target.value})}>
                     <option value="">Seleziona l&apos;agente...</option>
                     {agenti.map(a => <option key={a.id} value={a.id}>{a.cognome} {a.nome}</option>)}
                   </select>
                 </div>
               )}
 
+              {/* ANAGRAFICA */}
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
                 <div className="flex items-center gap-3 mb-6 text-blue-600">
                   <Building2 size={24} />
@@ -195,7 +216,13 @@ export default function GestioneClienti() {
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Partita IVA</label>
-                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1" value={form.sdi} onChange={e => setForm({...form, sdi: e.target.value})} />
+                    <input 
+                      className={`w-full p-4 rounded-2xl mt-1 outline-none border-2 transition-all ${form.sdi && !isPivaValida ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-transparent focus:border-blue-500'}`}
+                      value={form.sdi} 
+                      maxLength={11}
+                      onChange={e => setForm({...form, sdi: e.target.value.replace(/\D/g, '')})} 
+                    />
+                    {form.sdi && !isPivaValida && <p className="text-red-500 text-[10px] font-bold mt-1 ml-2 uppercase flex items-center gap-1"><AlertCircle size={12}/> Partita IVA Errata</p>}
                   </div>
                   <div className="md:col-span-2">
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Indirizzo (Via e Civico)</label>
@@ -233,7 +260,7 @@ export default function GestioneClienti() {
                 </div>
               </div>
 
-              {/* DATI AMMINISTRATIVI (RIPRISTINATI) */}
+              {/* DATI AMMINISTRATIVI */}
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
                 <div className="flex items-center gap-3 mb-6 text-emerald-600">
                   <Landmark size={24} />
@@ -271,6 +298,7 @@ export default function GestioneClienti() {
                 </div>
               </div>
 
+              {/* REFERENTI */}
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
                 <div className="flex justify-between items-center mb-6">
                   <div className="flex items-center gap-3 text-purple-600">
@@ -297,8 +325,17 @@ export default function GestioneClienti() {
                 </div>
               </div>
 
+              {/* PULSANTE SALVA */}
               <div className="flex justify-end pt-4">
-                <button type="submit" disabled={loading} className="bg-blue-600 text-white px-12 py-4 rounded-2xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-all shadow-xl shadow-blue-200">
+                <button 
+                  type="submit" 
+                  disabled={loading || (form.sdi !== '' && !isPivaValida)} 
+                  className={`px-12 py-4 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-xl ${
+                    loading || (form.sdi !== '' && !isPivaValida)
+                    ? 'bg-slate-300 cursor-not-allowed shadow-none'
+                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'
+                  }`}
+                >
                   <Save size={20} /> {loading ? 'Salvataggio...' : 'Salva Cliente'}
                 </button>
               </div>
