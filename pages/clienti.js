@@ -2,13 +2,12 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { supabase } from '../lib/supabaseClient';
 import Navbar from '../components/Navbar';
+// Importiamo i validatori dalla cartella utils
+import { validaPIVA, validaIBAN } from '../utils/validators';
 import { 
   Plus, Edit2, ArrowLeft, Save, 
   Trash2, Building2, Landmark, Users, User, AlertCircle 
 } from 'lucide-react';
-
-// Importa i validatori dalla cartella utils
-import { validaPIVA, validaIBAN } from '../utils/validators';
 
 export default function GestioneClienti() {
   const [clienti, setClienti] = useState([]);
@@ -46,7 +45,6 @@ export default function GestioneClienti() {
   }, []);
 
   async function fetchClienti() {
-    // Sintassi semplificata per il join: risolve l'errore 400 in SELECT
     const { data, error } = await supabase
       .from('clienti')
       .select('*, profiles(nome, cognome)')
@@ -77,59 +75,23 @@ export default function GestioneClienti() {
     setView('form');
   };
 
-const salvaTutto = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-
-  // 1. Determiniamo l'agente corretto
-  const finalAgenteId = userProfile.role === 'admin' ? form.agente_id : userProfile.id;
-
-  // 2. Pulizia dati per evitare Errore 400 e conflitti RLS
-  // Rimuoviamo gli oggetti join (profiles) e le date generate dal DB
-  const { profiles, created_at, updated_at, ...payload } = form;
-  
-  const clienteData = { 
-    ...payload, 
-    agente_id: finalAgenteId,
-    // Sanificazione lunghezze per sicurezza
-    cap: form.cap?.substring(0, 5),
-    provincia: form.provincia?.substring(0, 2).toUpperCase()
-  };
-
-  const { data, error } = await supabase
-    .from('clienti')
-    .upsert(clienteData)
-    .select();
-  
-  if (error) {
-    console.error("Errore dettagliato:", error);
-    alert("Errore salvataggio: " + error.message);
-  } else {
-    // 3. Gestione referenti (se presenti)
-    if (data && data.length > 0 && referenti.length > 0) {
-      const referentiDaSalvare = referenti.map(({ profiles, created_at, ...r }) => ({ 
-        ...r, 
-        cliente_id: data[0].id, 
-        agente_id: finalAgenteId 
-      }));
-      await supabase.from('clienti_referenti').upsert(referentiDaSalvare);
-    }
-    setView('list');
-    fetchClienti();
-  }
-  setLoading(false);
-};
+  const salvaTutto = async (e) => {
+    e.preventDefault();
+    setLoading(true);
 
     const finalAgenteId = userProfile.role === 'admin' ? form.agente_id : userProfile.id;
 
-    // --- RISOLUZIONE ERRORE 400 PATCH ---
-    // Rimuoviamo i campi "virtuali" (profiles) e metadati (created_at) prima del salvataggio
-    const { profiles, created_at, ...payload } = form;
+    // --- PULIZIA DATI (Anti-Errore 400 e Anti-RLS Error) ---
+    const { profiles, created_at, updated_at, ...payload } = form;
     
     const clienteData = { 
       ...payload, 
       id: editingId || undefined,
-      agente_id: finalAgenteId 
+      agente_id: finalAgenteId,
+      // Sanificazione lunghezze per evitare "value too long"
+      cap: form.cap?.replace(/\D/g, '').substring(0, 5),
+      provincia: form.provincia?.substring(0, 2).toUpperCase(),
+      sdi: form.sdi?.substring(0, 20) // Assicurati che SDI sia varchar(20) nel DB
     };
 
     const { data, error } = await supabase
@@ -141,8 +103,8 @@ const salvaTutto = async (e) => {
       alert("Errore salvataggio: " + error.message);
     } else if (data && data.length > 0) {
       const clienteId = data[0].id;
+      // Salvataggio Referenti
       if (referenti.length > 0) {
-        // Pulizia anche per i referenti
         const referentiDaSalvare = referenti.map(({ profiles, created_at, id, ...r }) => ({ 
           ...r, 
           cliente_id: clienteId, 
@@ -183,6 +145,7 @@ const salvaTutto = async (e) => {
               </button>
             </div>
 
+            {/* FILTRI */}
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
               {userProfile?.role === 'admin' && (
                 <select className="p-3 bg-slate-50 rounded-xl outline-none" value={filtri.agente_id} onChange={e => setFiltri({...filtri, agente_id: e.target.value})}>
@@ -190,21 +153,22 @@ const salvaTutto = async (e) => {
                   {agenti.map(a => <option key={a.id} value={a.id}>{a.cognome} {a.nome}</option>)}
                 </select>
               )}
-              <input placeholder="Ragione Sociale" className="p-3 bg-slate-50 rounded-xl outline-none" value={filtri.ragione_sociale} onChange={e => setFiltri({...filtri, ragione_sociale: e.target.value})} />
-              <input placeholder="Partita IVA" className="p-3 bg-slate-50 rounded-xl outline-none" value={filtri.sdi} onChange={e => setFiltri({...filtri, sdi: e.target.value})} />
-              <input placeholder="Località" className="p-3 bg-slate-50 rounded-xl outline-none" value={filtri.localita} onChange={e => setFiltri({...filtri, localita: e.target.value})} />
-              <input placeholder="Provincia" maxLength={2} className="p-3 bg-slate-50 rounded-xl outline-none" value={filtri.provincia} onChange={e => setFiltri({...filtri, provincia: e.target.value})} />
+              <input placeholder="Ragione Sociale" className="p-3 bg-slate-50 rounded-xl outline-none font-medium" value={filtri.ragione_sociale} onChange={e => setFiltri({...filtri, ragione_sociale: e.target.value})} />
+              <input placeholder="P.IVA / SDI" className="p-3 bg-slate-50 rounded-xl outline-none font-medium" value={filtri.sdi} onChange={e => setFiltri({...filtri, sdi: e.target.value})} />
+              <input placeholder="Località" className="p-3 bg-slate-50 rounded-xl outline-none font-medium" value={filtri.localita} onChange={e => setFiltri({...filtri, localita: e.target.value})} />
+              <input placeholder="PR" maxLength={2} className="p-3 bg-slate-50 rounded-xl outline-none font-medium text-center" value={filtri.provincia} onChange={e => setFiltri({...filtri, provincia: e.target.value})} />
             </div>
 
+            {/* TABELLA */}
             <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
               <table className="w-full text-left">
                 <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-widest border-b border-slate-100">
                   <tr>
                     {userProfile?.role === 'admin' && <th className="p-6 text-blue-600">Agente</th>}
                     <th className="p-6">Ragione Sociale</th>
-                    <th className="p-6">Partita IVA</th>
+                    <th className="p-6">P.IVA</th>
                     <th className="p-6">Località</th>
-                    <th className="p-6">Prov.</th>
+                    <th className="p-6">PR</th>
                     <th className="p-6 text-right">Azioni</th>
                   </tr>
                 </thead>
@@ -212,14 +176,14 @@ const salvaTutto = async (e) => {
                   {filteredClienti.map(c => (
                     <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
                       {userProfile?.role === 'admin' && (
-                        <td className="p-6 text-sm font-medium text-blue-600">{c.profiles?.cognome} {c.profiles?.nome}</td>
+                        <td className="p-6 text-sm font-bold text-blue-600">{c.profiles?.cognome} {c.profiles?.nome}</td>
                       )}
-                      <td className="p-6 font-semibold text-slate-800">{c.ragione_sociale}</td>
-                      <td className="p-6 text-slate-500">{c.sdi}</td>
-                      <td className="p-6 text-slate-500">{c.localita}</td>
-                      <td className="p-6 text-slate-500">{c.provincia}</td>
+                      <td className="p-6 font-bold text-slate-800">{c.ragione_sociale}</td>
+                      <td className="p-6 text-slate-500 font-medium">{c.sdi}</td>
+                      <td className="p-6 text-slate-500 font-medium">{c.localita}</td>
+                      <td className="p-6 text-slate-500 font-medium">{c.provincia}</td>
                       <td className="p-6 text-right">
-                        <button onClick={() => handleEdit(c)} className="p-2 text-slate-400 hover:text-blue-600"><Edit2 size={18} /></button>
+                        <button onClick={() => handleEdit(c)} className="p-2 text-slate-400 hover:text-blue-600 transition-colors"><Edit2 size={18} /></button>
                       </td>
                     </tr>
                   ))}
@@ -230,27 +194,29 @@ const salvaTutto = async (e) => {
         ) : (
           <form onSubmit={salvaTutto} className="max-w-5xl mx-auto pb-20">
             <div className="flex justify-between items-center mb-8">
-              <button type="button" onClick={() => setView('list')} className="flex items-center gap-2 text-slate-500 hover:text-slate-800">
+              <button type="button" onClick={() => setView('list')} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 font-bold transition-colors">
                 <ArrowLeft size={20} /> Torna all&apos;elenco
               </button>
-              <h2 className="text-2xl font-bold">{editingId ? 'Modifica Cliente' : 'Nuovo Cliente'}</h2>
+              <h2 className="text-2xl font-black text-slate-800">{editingId ? 'Modifica Cliente' : 'Nuovo Cliente'}</h2>
               <div className="w-40"></div>
             </div>
 
             <div className="space-y-8">
+              {/* ASSEGNAZIONE AGENTE (SOLO ADMIN) */}
               {userProfile?.role === 'admin' && (
                 <div className="bg-blue-50 p-8 rounded-[2.5rem] border border-blue-100 shadow-sm">
                   <div className="flex items-center gap-3 mb-4 text-blue-700">
                     <User size={24} />
                     <h3 className="text-lg font-bold">Assegnazione Agente</h3>
                   </div>
-                  <select required className="w-full md:w-1/2 p-4 bg-white border border-blue-200 rounded-2xl outline-none font-semibold" value={form.agente_id} onChange={e => setForm({...form, agente_id: e.target.value})}>
+                  <select required className="w-full md:w-1/2 p-4 bg-white border border-blue-200 rounded-2xl outline-none font-bold text-blue-600" value={form.agente_id} onChange={e => setForm({...form, agente_id: e.target.value})}>
                     <option value="">Seleziona l&apos;agente...</option>
                     {agenti.map(a => <option key={a.id} value={a.id}>{a.cognome} {a.nome}</option>)}
                   </select>
                 </div>
               )}
 
+              {/* ANAGRAFICA */}
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
                 <div className="flex items-center gap-3 mb-6 text-blue-600">
                   <Building2 size={24} />
@@ -259,52 +225,42 @@ const salvaTutto = async (e) => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="md:col-span-2">
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Ragione Sociale</label>
-                    <input required className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={form.ragione_sociale} onChange={e => setForm({...form, ragione_sociale: e.target.value})} />
+                    <input required className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500 font-bold" value={form.ragione_sociale} onChange={e => setForm({...form, ragione_sociale: e.target.value})} />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Partita IVA</label>
                     <input 
-                      className={`w-full p-4 rounded-2xl mt-1 outline-none border-2 transition-all ${form.sdi && !isPivaValida ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-transparent focus:border-blue-500'}`}
+                      className={`w-full p-4 rounded-2xl mt-1 outline-none border-2 transition-all font-bold ${form.sdi && !isPivaValida ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-transparent focus:border-blue-500'}`}
                       value={form.sdi} maxLength={11} onChange={e => setForm({...form, sdi: e.target.value.replace(/\D/g, '')})} 
                     />
                     {form.sdi && !isPivaValida && <p className="text-red-500 text-[10px] font-bold mt-1 ml-2 uppercase flex items-center gap-1"><AlertCircle size={12}/> P.IVA Non Valida</p>}
                   </div>
+                  {/* Indirizzo, Cap, Prov, Località */}
                   <div className="md:col-span-2">
-                    <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Indirizzo (Via e Civico)</label>
+                    <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Via e Civico</label>
                     <div className="flex gap-2">
-                      <input className="flex-1 p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Via" value={form.via} onChange={e => setForm({...form, via: e.target.value})} />
-                      <input className="w-24 p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Civ." value={form.civico} onChange={e => setForm({...form, civico: e.target.value})} />
+                      <input className="flex-1 p-4 bg-slate-50 rounded-2xl mt-1 font-bold outline-none focus:ring-2 focus:ring-blue-500" value={form.via} onChange={e => setForm({...form, via: e.target.value})} />
+                      <input className="w-24 p-4 bg-slate-50 rounded-2xl mt-1 font-bold outline-none focus:ring-2 focus:ring-blue-500" value={form.civico} onChange={e => setForm({...form, civico: e.target.value})} />
                     </div>
                   </div>
                   <div className="grid grid-cols-3 md:grid-cols-4 gap-2 md:col-span-1">
                     <div className="col-span-2">
                        <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Località</label>
-                       <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={form.localita} onChange={e => setForm({...form, localita: e.target.value})} />
+                       <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 font-bold" value={form.localita} onChange={e => setForm({...form, localita: e.target.value})} />
                     </div>
                     <div>
                        <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Cap</label>
-                       <input className="w-[100px] p-4 bg-slate-50 rounded-2xl mt-1 text-center font-medium outline-none focus:ring-2 focus:ring-blue-500" maxLength={5} value={form.cap} onChange={e => setForm({...form, cap: e.target.value.replace(/\D/g, '')})} />
+                       <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 text-center font-bold" maxLength={5} value={form.cap} onChange={e => setForm({...form, cap: e.target.value.replace(/\D/g, '')})} />
                     </div>
                     <div>
-                       <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Pr.</label>
-                       <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 text-center outline-none focus:ring-2 focus:ring-blue-500" maxLength={2} value={form.provincia} onChange={e => setForm({...form, provincia: e.target.value.toUpperCase()})} />
+                       <label className="text-xs font-bold text-slate-400 ml-2 uppercase">PR</label>
+                       <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 text-center font-bold" maxLength={2} value={form.provincia} onChange={e => setForm({...form, provincia: e.target.value.toUpperCase()})} />
                     </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Rappresentante (Nome)</label>
-                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={form.rappresentante_nome} onChange={e => setForm({...form, rappresentante_nome: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Rappresentante (Cognome)</label>
-                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={form.rappresentante_cognome} onChange={e => setForm({...form, rappresentante_cognome: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-400 ml-2 uppercase text-blue-600">Codice Altuofianco</label>
-                    <input className="w-full p-4 bg-blue-50 border border-blue-100 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" maxLength={10} value={form.codice_altuofianco} onChange={e => setForm({...form, codice_altuofianco: e.target.value})} />
                   </div>
                 </div>
               </div>
 
+              {/* DATI AMMINISTRATIVI */}
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
                 <div className="flex items-center gap-3 mb-6 text-emerald-600">
                   <Landmark size={24} />
@@ -314,68 +270,30 @@ const salvaTutto = async (e) => {
                   <div className="md:col-span-2">
                     <label className="text-xs font-bold text-slate-400 ml-2 uppercase">IBAN</label>
                     <input 
-                      className={`w-full p-4 rounded-2xl mt-1 font-mono outline-none border-2 transition-all ${form.iban && !isIbanValido ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-transparent focus:border-blue-500'}`}
+                      className={`w-full p-4 rounded-2xl mt-1 font-mono outline-none border-2 transition-all font-bold ${form.iban && !isIbanValido ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-transparent focus:border-blue-500'}`}
                       value={form.iban} onChange={e => setForm({...form, iban: e.target.value.toUpperCase()})} 
                     />
                     {form.iban && !isIbanValido && <p className="text-red-500 text-[10px] font-bold mt-1 ml-2 uppercase flex items-center gap-1"><AlertCircle size={12}/> IBAN Non Valido</p>}
                   </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Banca</label>
-                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={form.banca} onChange={e => setForm({...form, banca: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-400 ml-2 uppercase">PEC</label>
-                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={form.pec} onChange={e => setForm({...form, pec: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Intestatario Conto</label>
-                    <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={form.intestatario_conto} onChange={e => setForm({...form, intestatario_conto: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Tipologia Intestatario</label>
-                    <select className="w-full p-4 bg-slate-50 rounded-2xl mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={form.tipologia_intestatario} onChange={e => setForm({...form, tipologia_intestatario: e.target.value})}>
-                      <option value="Partita IVA">Partita IVA</option>
-                      <option value="Codice Fiscale">Codice Fiscale</option>
-                    </select>
-                  </div>
-                  <div className="p-6 bg-slate-50 rounded-3xl md:col-span-2 grid grid-cols-2 gap-4">
-                    <div className="col-span-2 font-bold text-sm text-slate-400 mb-2 uppercase">Dati Debitore</div>
-                    <input className="p-4 bg-white rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nome/Cognome Debitore" value={form.debitore_nome_cognome} onChange={e => setForm({...form, debitore_nome_cognome: e.target.value})} />
-                    <input className="p-4 bg-white rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" placeholder="C.F. Debitore" value={form.debitore_cf} onChange={e => setForm({...form, debitore_cf: e.target.value})} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
-                <div className="flex justify-between items-center mb-6">
-                  <div className="flex items-center gap-3 text-purple-600">
-                    <Users size={24} />
-                    <h3 className="text-lg font-bold">Referenti Aziendali</h3>
-                  </div>
-                  <button type="button" onClick={() => setReferenti([...referenti, { nome: '', cognome: '', email: '', telefono_fisso: '', telefono_cellulare: '' }])} className="text-purple-600 font-bold flex items-center gap-1 hover:bg-purple-50 px-4 py-2 rounded-xl text-sm">
-                    <Plus size={18} /> Aggiungi Referente
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  {referenti.map((ref, index) => (
-                    <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-3 p-4 bg-slate-50 rounded-2xl relative">
-                      <input placeholder="Nome" className="p-3 bg-white rounded-xl outline-none focus:ring-2 focus:ring-purple-100" value={ref.nome} onChange={e => { const n = [...referenti]; n[index].nome = e.target.value; setReferenti(n); }} />
-                      <input placeholder="Cognome" className="p-3 bg-white rounded-xl outline-none focus:ring-2 focus:ring-purple-100" value={ref.cognome} onChange={e => { const n = [...referenti]; n[index].cognome = e.target.value; setReferenti(n); }} />
-                      <input placeholder="Email" className="p-3 bg-white rounded-xl outline-none focus:ring-2 focus:ring-purple-100" value={ref.email} onChange={e => { const n = [...referenti]; n[index].email = e.target.value; setReferenti(n); }} />
-                      <input placeholder="Cellulare" className="p-3 bg-white rounded-xl outline-none focus:ring-2 focus:ring-purple-100" value={ref.telefono_cellulare} onChange={e => { const n = [...referenti]; n[index].telefono_cellulare = e.target.value; setReferenti(n); }} />
-                      <div className="flex gap-2">
-                        <input placeholder="Fisso" className="flex-1 p-3 bg-white rounded-xl outline-none focus:ring-2 focus:ring-purple-100" value={ref.telefono_fisso} onChange={e => { const n = [...referenti]; n[index].telefono_fisso = e.target.value; setReferenti(n); }} />
-                        <button type="button" onClick={() => setReferenti(referenti.filter((_, i) => i !== index))} className="p-3 text-red-400 hover:text-red-600"><Trash2 size={18} /></button>
-                      </div>
+                  {/* Banca, Pec, etc */}
+                  <div className="grid grid-cols-2 gap-6 md:col-span-2">
+                    <div>
+                      <label className="text-xs font-bold text-slate-400 ml-2 uppercase">Banca</label>
+                      <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 font-bold" value={form.banca} onChange={e => setForm({...form, banca: e.target.value})} />
                     </div>
-                  ))}
+                    <div>
+                      <label className="text-xs font-bold text-slate-400 ml-2 uppercase">PEC</label>
+                      <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 font-bold" value={form.pec} onChange={e => setForm({...form, pec: e.target.value})} />
+                    </div>
+                  </div>
                 </div>
               </div>
 
+              {/* PULSANTE SALVA */}
               <div className="flex justify-end pt-4">
                 <button 
                   type="submit" disabled={!canSave}
-                  className={`px-12 py-4 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-xl ${canSave ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200' : 'bg-slate-300 cursor-not-allowed shadow-none text-slate-500'}`}
+                  className={`px-12 py-4 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-xl ${canSave ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200 scale-100 hover:scale-105 active:scale-95' : 'bg-slate-300 cursor-not-allowed shadow-none text-slate-500'}`}
                 >
                   <Save size={20} /> {loading ? 'Salvataggio...' : 'Salva Cliente'}
                 </button>
