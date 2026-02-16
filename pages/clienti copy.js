@@ -115,23 +115,32 @@ export default function GestioneClienti() {
 
   const salvaTutto = async (e) => {
     e.preventDefault();
+    
+    // 1. Protezione: se i validatori (PIVA/IBAN) falliscono, interrompiamo subito
     if (!canSave) {
       alert("Controlla i campi evidenziati in rosso (Partita IVA o IBAN non validi).");
       return;
     }
+
     setLoading(true);
+
     try {
+      // 2. Determiniamo l'agente_id corretto (se admin usa quello del form, se agente usa il proprio profilo)
+      // Usiamo una fallback null se la stringa è vuota per evitare errori su campi UUID
       const finalAgenteId = (userProfile.role === 'admin' ? form.agente_id : userProfile.id) || null;
+
+      // 3. Pulizia payload: separiamo i campi di sola lettura (derivati da join) dai dati puri
       const { profiles, created_at, updated_at, ...payload } = form;
       
       const clienteData = { 
         ...payload, 
-        id: editingId || undefined, 
+        id: editingId || undefined, // Se editingId è null, Supabase crea un nuovo record
         agente_id: finalAgenteId,
         provincia: form.provincia?.toUpperCase().substring(0, 2),
         cap: form.cap?.replace(/\D/g, '').substring(0, 5)
       };
 
+      // 4. Upsert del Cliente
       const { data: clienteSalvato, error: errorCliente } = await supabase
         .from('clienti')
         .upsert(clienteData)
@@ -141,6 +150,9 @@ export default function GestioneClienti() {
 
       if (clienteSalvato && clienteSalvato.length > 0) {
         const clienteId = clienteSalvato[0].id;
+
+        // 5. Gestione Referenti: Pulizia preventiva (Delete)
+        // Nota: se ottieni 403 qui, serve una policy DELETE su Supabase
         const { error: errorDelete } = await supabase
           .from('clienti_referenti')
           .delete()
@@ -148,20 +160,29 @@ export default function GestioneClienti() {
         
         if (errorDelete) console.warn("Nota: Impossibile pulire referenti precedenti:", errorDelete.message);
 
+        // 6. Inserimento nuovi Referenti (Modificato per riflettere il nuovo DB)
         if (referenti.length > 0) {
           const referentiDaSalvare = referenti.map(r => ({
             nome: r.nome || '',
             cognome: r.cognome || '',
             email: r.email || '',
             telefono_fisso: r.telefono_fisso || '',
-            telefono_cellulare: r.telefono_cellulare || '', 
+            telefono_cellulare: r.telefono_cellulare || '', // Nome campo corretto
             cliente_id: clienteId
+            // agente_id rimosso per allinearsi con la nuova struttura della tabella
           }));
+
           const { error: errorInsertRef } = await supabase
             .from('clienti_referenti')
             .insert(referentiDaSalvare);
-          if (errorInsertRef) throw new Error(`Errore Referenti: ${errorInsertRef.message}`);
+
+          if (errorInsertRef) {
+            // Se fallisce qui con 403, il problema è la policy INSERT
+            throw new Error(`Errore Referenti (403/Forbidden): ${errorInsertRef.message}`);
+          }
         }
+
+        // Successo: torna alla lista e rinfresca i dati
         setView('list');
         fetchClienti();
       }
@@ -262,42 +283,28 @@ export default function GestioneClienti() {
               <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter">{editingId ? 'Modifica Cliente' : 'Nuova Anagrafica'}</h2>
             </div>
 
-            {/* 1. DATI IDENTIFICATIVI */}
+            {/* 1. DATI IDENTIFICATIVI - VALIDAZIONE PIVA */}
             <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
               <div className="flex items-center gap-3 text-blue-600 font-black uppercase text-xs tracking-widest border-b pb-4">
                 <Building2 size={20} /> 1. Dati Identificativi
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 ml-2 uppercase">Ragione Sociale</label>
-                  <input required placeholder="Ragione Sociale" className="w-full p-4 bg-slate-50 rounded-2xl mt-1 font-bold outline-none border-2 border-transparent focus:border-blue-500" value={form.ragione_sociale} onChange={e => setForm({...form, ragione_sociale: e.target.value})} />
-                </div>
+                <input required placeholder="Ragione Sociale" className="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-500" value={form.ragione_sociale} onChange={e => setForm({...form, ragione_sociale: e.target.value})} />
                 <div className="relative">
-                  <label className="text-[10px] font-black text-slate-400 ml-2 uppercase">Partita IVA</label>
                   <input 
                     required 
                     placeholder="Partita IVA" 
                     maxLength={11} 
-                    className={`w-full p-4 rounded-2xl mt-1 font-bold outline-none border-2 transition-all ${!isPivaValid ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-transparent focus:border-blue-500'}`}
+                    className={`w-full p-4 rounded-2xl font-bold outline-none border-2 transition-all ${!isPivaValid ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-transparent focus:border-blue-500'}`}
                     value={form.partita_iva} 
                     onChange={e => setForm({...form, partita_iva: e.target.value.replace(/\D/g, '')})} 
                   />
                   {!isPivaValid && <p className="text-[9px] text-red-500 font-black uppercase mt-1 ml-2">P.IVA non valida</p>}
                 </div>
-                
-                {/* NUOVI CAMPI: LEGALE RAPPRESENTANTE */}
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 ml-2 uppercase">Nome Legale Rappresentante</label>
-                  <input placeholder="Nome" className="w-full p-4 bg-slate-50 rounded-2xl mt-1 font-bold outline-none border-2 border-transparent focus:border-blue-500" value={form.rappresentante_nome} onChange={e => setForm({...form, rappresentante_nome: e.target.value})} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 ml-2 uppercase">Cognome Legale Rappresentante</label>
-                  <input placeholder="Cognome" className="w-full p-4 bg-slate-50 rounded-2xl mt-1 font-bold outline-none border-2 border-transparent focus:border-blue-500" value={form.rappresentante_cognome} onChange={e => setForm({...form, rappresentante_cognome: e.target.value})} />
-                </div>
               </div>
             </section>
 
-            {/* 2. INDIRIZZO */}
+            {/* 2. INDIRIZZO (Invariato) */}
             <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
               <div className="flex items-center gap-3 text-orange-600 font-black uppercase text-xs tracking-widest border-b pb-4">
                 <MapPin size={20} /> 2. Indirizzo Sede Legale
@@ -311,7 +318,7 @@ export default function GestioneClienti() {
               </div>
             </section>
 
-            {/* 3. REFERENTI */}
+            {/* 3. REFERENTI (Invariato) */}
             <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
               <div className="flex justify-between items-center border-b pb-4">
                 <div className="flex items-center gap-3 text-indigo-600 font-black uppercase text-xs tracking-widest">
@@ -340,7 +347,7 @@ export default function GestioneClienti() {
               </div>
             </section>
 
-            {/* 4. AMMINISTRAZIONE */}
+            {/* 4. AMMINISTRAZIONE - VALIDAZIONE IBAN */}
             <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
               <div className="flex items-center gap-3 text-emerald-600 font-black uppercase text-xs tracking-widest border-b pb-4">
                 <CreditCard size={20} /> 4. Amministrazione e Fatturazione
@@ -372,7 +379,7 @@ export default function GestioneClienti() {
           </form>
         )}
 
-        {/* MODAL REFERENTE */}
+        {/* --- MODAL REFERENTE (Invariata) --- */}
         {isModalOpen && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-xl rounded-[3rem] shadow-2xl p-10 space-y-6 animate-in zoom-in duration-200">
