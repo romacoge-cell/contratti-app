@@ -96,17 +96,29 @@ export default function Contratti() {
   }, [searchQuery, form.cliente_id]);
 
   // --- AZIONI ---
-  const selezionaCliente = async (cli) => {
-    setForm({ ...form, 
-      cliente_id: cli.id, via: cli.via || '', civico: cli.civico || '', localita: cli.localita || '', 
-      provincia: cli.provincia || '', cap: cli.cap || '', iban: cli.iban || '', banca: cli.banca || '', 
-      sdi: cli.sdi || '', pec: cli.pec || '', intestatario_conto: cli.ragione_sociale || '',
-      codice_altuofianco: cli.codice_altuofianco || ''
-    });
-    setSearchQuery(cli.ragione_sociale);
-    const { data: refs } = await supabase.from('clienti_referenti').select('*').eq('cliente_id', cli.id);
-    setReferentiCliente(refs || []);
-  };
+const selezionaCliente = async (cli) => {
+  setForm({ ...form, 
+    cliente_id: cli.id, 
+    via: cli.via || '', 
+    civico: cli.civico || '', 
+    localita: cli.localita || '', 
+    provincia: cli.provincia || '', 
+    cap: cli.cap || '', 
+    // AGGIUNGI QUESTE DUE RIGHE:
+    rappresentante_nome: cli.rappresentante_nome || '',
+    rappresentante_cognome: cli.rappresentante_cognome || '',
+    // -------------------------
+    iban: cli.iban || '', 
+    banca: cli.banca || '', 
+    sdi: cli.sdi || '', 
+    pec: cli.pec || '', 
+    intestatario_conto: cli.ragione_sociale || '',
+    codice_altuofianco: cli.codice_altuofianco || ''
+  });
+  setSearchQuery(cli.ragione_sociale);
+  const { data: refs } = await supabase.from('clienti_referenti').select('*').eq('cliente_id', cli.id);
+  setReferentiCliente(refs || []);
+};
 
   const salvaContratto = async (e) => {
     if (e) e.preventDefault();
