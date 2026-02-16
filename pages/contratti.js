@@ -5,7 +5,7 @@ import Navbar from '../components/Navbar';
 // IMPORT DEI COMPONENTI MODULARI
 import ContrattiFilters from '../components/ContrattiFilters';
 import ContrattiTable from '../components/ContrattiTable';
-import ContrattiForm from '../components/form/ContrattiForm';
+import ContrattiForm from '../components/ContrattiForm';
 import ModalReferente from '../components/ModalReferente';
 
 import { Plus } from 'lucide-react';
