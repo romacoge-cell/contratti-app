@@ -146,11 +146,15 @@ const salvaContratto = async (e) => {
   if (e) e.preventDefault();
   setLoading(true);
 
-  // Prepariamo i dati per il salvataggio
+  // 1. Estraiamo dall'oggetto form le proprietà che NON sono colonne reali della tabella contratti
+  // 'clienti' e 'profiles' sono i join caricati dalla fetch
+  const { clienti, profiles, ...datiPuliti } = form;
+
+  // 2. Prepariamo il payload finale
   const payload = {
-    ...form,
+    ...datiPuliti,
     agente_id: form.agente_id || userProfile.id,
-    // Se la stringa è vuota, inviamo null, altrimenti la data inserita
+    // Gestione date vuote per evitare errori di sintassi date
     data_firma: form.data_firma || null,
     data_esito: form.data_esito || null
   };
