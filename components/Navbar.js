@@ -56,6 +56,10 @@ export default function Navbar() {
             <a href="/tipologie" className="flex items-center gap-3 p-4 hover:bg-slate-800 rounded-2xl transition-all text-slate-300 hover:text-white group">
               <Settings size={20} className="group-hover:text-blue-400" /> Tipologie
             </a>
+
+            <a href="/sottotipologie" className="flex items-center gap-3 p-4 hover:bg-slate-800 rounded-2xl transition-all text-slate-300 hover:text-white group">
+              <layers size={20} className="group-hover:text-blue-400" /> Sottotipologie
+            </a>
           </>
         )}
 
