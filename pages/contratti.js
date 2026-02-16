@@ -6,7 +6,7 @@ import Navbar from '../components/Navbar';
 import ContrattiFilters from '../components/ContrattiFilters';
 import ContrattiTable from '../components/ContrattiTable';
 import ContrattiForm from '../components/ContrattiForm';
-import ModalReferente from '../components/ModalReferente'; // <--- Il tuo componente
+import ModalReferente from '../components/ModalReferente';
 
 import { Plus } from 'lucide-react';
 
@@ -32,13 +32,32 @@ export default function Contratti() {
   const [referentiCliente, setReferentiCliente] = useState([]);
 
   const [form, setForm] = useState({
-    cliente_id: '', agente_id: '', tipo: 'A1', stato: 'Bozza',
+    cliente_id: '', 
+    agente_id: '', 
+    tipo: 'A1', 
+    stato: 'Bozza',
+    // Referente selezionato
     ref_nome: '', ref_cognome: '', ref_email: '', ref_telefono: '', ref_cellulare: '',
+    // Sede Legale
     via: '', civico: '', localita: '', provincia: '', cap: '',
-    rappresentante_nome: '', rappresentante_cognome: '', codice_altuofianco: '',
-    iban: '', banca: '', intestatario_conto: '', tipologia_intestatario: 'Partita IVA',
-    debitore_nome_cognome: '', debitore_cf: '', sdi: '', pec: '',
-    data_firma: new Date().toISOString().split('T')[0], luogo_firma: '', data_esito: ''
+    // Rappresentanza e Segnalazione
+    rappresentante_nome: '', 
+    rappresentante_cognome: '', 
+    segnalatore_nome_cognome: '',
+    codice_altuofianco: '',
+    // Amministrazione
+    iban: '', 
+    banca: '', 
+    intestatario_conto: '', 
+    tipologia_intestatario: 'Partita IVA',
+    debitore_nome_cognome: '', 
+    debitore_cf: '', 
+    sdi: '', 
+    pec: '',
+    // Date e Firma
+    data_firma: new Date().toISOString().split('T')[0], 
+    luogo_firma: '', 
+    data_esito: ''
   });
 
   // --- LOGICA INIZIALE ---
@@ -90,42 +109,58 @@ export default function Contratti() {
   // Suggerimenti Form Cliente
   useEffect(() => {
     if (searchQuery.length > 1 && !form.cliente_id) {
+      // Usiamo select('*') per essere certi di scaricare tutti i nuovi campi (debitore, banca, ecc.)
       supabase.from('clienti').select('*').ilike('ragione_sociale', `%${searchQuery}%`).limit(5)
         .then(({data}) => setSuggerimenti(data || []));
     } else setSuggerimenti([]);
   }, [searchQuery, form.cliente_id]);
 
   // --- AZIONI ---
-const selezionaCliente = async (cli) => {
-  setForm({ ...form, 
-    cliente_id: cli.id, 
-    via: cli.via || '', 
-    civico: cli.civico || '', 
-    localita: cli.localita || '', 
-    provincia: cli.provincia || '', 
-    cap: cli.cap || '', 
-    // AGGIUNGI QUESTE DUE RIGHE:
-    rappresentante_nome: cli.rappresentante_nome || '',
-    rappresentante_cognome: cli.rappresentante_cognome || '',
-    // -------------------------
-    iban: cli.iban || '', 
-    banca: cli.banca || '', 
-    sdi: cli.sdi || '', 
-    pec: cli.pec || '', 
-    intestatario_conto: cli.ragione_sociale || '',
-    codice_altuofianco: cli.codice_altuofianco || ''
-  });
-  setSearchQuery(cli.ragione_sociale);
-  const { data: refs } = await supabase.from('clienti_referenti').select('*').eq('cliente_id', cli.id);
-  setReferentiCliente(refs || []);
-};
+  const selezionaCliente = async (cli) => {
+    setForm({ 
+      ...form, 
+      cliente_id: cli.id, 
+      via: cli.via || '', 
+      civico: cli.civico || '', 
+      localita: cli.localita || '', 
+      provincia: cli.provincia || '', 
+      cap: cli.cap || '', 
+      rappresentante_nome: cli.rappresentante_nome || '',
+      rappresentante_cognome: cli.rappresentante_cognome || '',
+      iban: cli.iban || '', 
+      banca: cli.banca || '', 
+      sdi: cli.sdi || '', 
+      pec: cli.pec || '', 
+      debitore_nome_cognome: cli.debitore_nome_cognome || '',
+      debitore_cf: cli.debitore_cf || '',
+      intestatario_conto: cli.intestatario_conto || cli.ragione_sociale || '',
+      tipologia_intestatario: cli.tipologia_intestatario || 'Partita IVA',
+      codice_altuofianco: cli.codice_altuofianco || ''
+    });
+    setSearchQuery(cli.ragione_sociale);
+    const { data: refs } = await supabase.from('clienti_referenti').select('*').eq('cliente_id', cli.id);
+    setReferentiCliente(refs || []);
+  };
 
   const salvaContratto = async (e) => {
     if (e) e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.from('contratti').upsert({ ...form, agente_id: form.agente_id || userProfile.id });
-    if (error) alert(error.message);
-    else { setView('list'); fetchContratti(); }
+    
+    // Inserisce o aggiorna il contratto con tutti i campi presenti nello stato 'form'
+    const { error } = await supabase
+      .from('contratti')
+      .upsert({ 
+        ...form, 
+        agente_id: form.agente_id || userProfile.id 
+      });
+
+    if (error) {
+      console.error("Errore salvataggio:", error);
+      alert(error.message);
+    } else { 
+      setView('list'); 
+      fetchContratti(); 
+    }
     setLoading(false);
   };
 
@@ -137,10 +172,13 @@ const selezionaCliente = async (cli) => {
         {view === 'list' ? (
           <>
             <div className="flex justify-between items-center mb-8">
-              <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter uppercase">Gestione Contratti</h1>
+              <div>
+                <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">Gestione Contratti</h1>
+                <p className="text-slate-400 text-sm font-bold uppercase tracking-widest mt-1">Archivio contratti e pratiche</p>
+              </div>
               <button 
-                onClick={() => { setView('form'); setIsEdit(false); setSearchQuery(''); }} 
-                className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 shadow-xl uppercase text-xs"
+                onClick={() => { setView('form'); setIsEdit(false); setSearchQuery(''); setForm({...form, cliente_id: ''}); }} 
+                className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 shadow-xl hover:bg-blue-700 uppercase text-xs transition-all active:scale-95"
               >
                 <Plus size={18} /> Nuovo Contratto
               </button>
@@ -184,15 +222,13 @@ const selezionaCliente = async (cli) => {
           />
         )}
 
-        {/* MODAL REFERENTE: Collegato allo stato del file principale */}
+        {/* MODAL REFERENTE */}
         {showRefModal && (
           <ModalReferente 
             clienteId={form.cliente_id} 
             onClose={() => setShowRefModal(false)} 
             onSuccess={(r) => { 
-                // 1. Aggiunge il nuovo referente alla lista dei selezionabili
                 setReferentiCliente([...referentiCliente, r]); 
-                // 2. Autocompila i campi del referente nel form del contratto
                 setForm({
                   ...form, 
                   ref_nome: r.nome, 
@@ -201,7 +237,6 @@ const selezionaCliente = async (cli) => {
                   ref_telefono: r.telefono_fisso, 
                   ref_cellulare: r.telefono_cellulare
                 }); 
-                // 3. Chiude il modal
                 setShowRefModal(false); 
             }} 
           />
