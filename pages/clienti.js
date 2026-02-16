@@ -283,7 +283,7 @@ export default function GestioneClienti() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-black text-purple-600 ml-2 uppercase">Codice SDI</label>
-                  <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 font-bold outline-none uppercase" value={form.sdi_codice} onChange={e => setForm({...form, sdi_codice: e.target.value.toUpperCase()})} />
+                  <input className="w-full p-4 bg-slate-50 rounded-2xl mt-1 font-bold outline-none uppercase" value={form.sdi} onChange={e => setForm({...form, sdi: e.target.value.toUpperCase()})} />
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-purple-600 ml-2 uppercase">PEC</label>
