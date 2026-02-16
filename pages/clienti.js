@@ -113,7 +113,7 @@ export default function GestioneClienti() {
     setReferenti(referenti.filter((_, i) => i !== index));
   };
 
-const salvaTutto = async (e) => {
+  const salvaTutto = async (e) => {
     e.preventDefault();
     
     // 1. Protezione: se i validatori (PIVA/IBAN) falliscono, interrompiamo subito
@@ -160,7 +160,7 @@ const salvaTutto = async (e) => {
         
         if (errorDelete) console.warn("Nota: Impossibile pulire referenti precedenti:", errorDelete.message);
 
-        // 6. Inserimento nuovi Referenti
+        // 6. Inserimento nuovi Referenti (Modificato per riflettere il nuovo DB)
         if (referenti.length > 0) {
           const referentiDaSalvare = referenti.map(r => ({
             nome: r.nome || '',
@@ -168,8 +168,8 @@ const salvaTutto = async (e) => {
             email: r.email || '',
             telefono_fisso: r.telefono_fisso || '',
             telefono_cellulare: r.telefono_cellulare || '', // Nome campo corretto
-            cliente_id: clienteId,
-            agente_id: finalAgenteId
+            cliente_id: clienteId
+            // agente_id rimosso per allinearsi con la nuova struttura della tabella
           }));
 
           const { error: errorInsertRef } = await supabase
