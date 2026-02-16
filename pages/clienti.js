@@ -113,45 +113,85 @@ export default function GestioneClienti() {
     setReferenti(referenti.filter((_, i) => i !== index));
   };
 
-  const salvaTutto = async (e) => {
+const salvaTutto = async (e) => {
     e.preventDefault();
-    if (!canSave) return; // Protezione extra
+    
+    // 1. Protezione: se i validatori (PIVA/IBAN) falliscono, interrompiamo subito
+    if (!canSave) {
+      alert("Controlla i campi evidenziati in rosso (Partita IVA o IBAN non validi).");
+      return;
+    }
 
     setLoading(true);
-    const finalAgenteId = userProfile.role === 'admin' ? form.agente_id : userProfile.id;
-    const { profiles, created_at, updated_at, ...payload } = form;
-    
-    const clienteData = { 
-      ...payload, 
-      id: editingId || undefined,
-      agente_id: finalAgenteId,
-      provincia: form.provincia?.toUpperCase().substring(0, 2),
-      cap: form.cap?.replace(/\D/g, '').substring(0, 5)
-    };
 
-    const { data, error } = await supabase.from('clienti').upsert(clienteData).select();
-    
-    if (error) {
-      alert("Errore salvataggio cliente: " + error.message);
-    } else if (data && data.length > 0) {
-      const clienteId = data[0].id;
-      await supabase.from('clienti_referenti').delete().eq('cliente_id', clienteId);
-      if (referenti.length > 0) {
-        const referentiDaSalvare = referenti.map(r => ({
-          nome: r.nome,
-          cognome: r.cognome,
-          email: r.email,
-          telefono_fisso: r.telefono_fisso,
-          telefono_cellulare: r.telefono_cellulare,
-          cliente_id: clienteId,
-          agente_id: finalAgenteId
-        }));
-        await supabase.from('clienti_referenti').insert(referentiDaSalvare);
+    try {
+      // 2. Determiniamo l'agente_id corretto (se admin usa quello del form, se agente usa il proprio profilo)
+      // Usiamo una fallback null se la stringa è vuota per evitare errori su campi UUID
+      const finalAgenteId = (userProfile.role === 'admin' ? form.agente_id : userProfile.id) || null;
+
+      // 3. Pulizia payload: separiamo i campi di sola lettura (derivati da join) dai dati puri
+      const { profiles, created_at, updated_at, ...payload } = form;
+      
+      const clienteData = { 
+        ...payload, 
+        id: editingId || undefined, // Se editingId è null, Supabase crea un nuovo record
+        agente_id: finalAgenteId,
+        provincia: form.provincia?.toUpperCase().substring(0, 2),
+        cap: form.cap?.replace(/\D/g, '').substring(0, 5)
+      };
+
+      // 4. Upsert del Cliente
+      const { data: clienteSalvato, error: errorCliente } = await supabase
+        .from('clienti')
+        .upsert(clienteData)
+        .select();
+      
+      if (errorCliente) throw new Error(`Errore Cliente: ${errorCliente.message}`);
+
+      if (clienteSalvato && clienteSalvato.length > 0) {
+        const clienteId = clienteSalvato[0].id;
+
+        // 5. Gestione Referenti: Pulizia preventiva (Delete)
+        // Nota: se ottieni 403 qui, serve una policy DELETE su Supabase
+        const { error: errorDelete } = await supabase
+          .from('clienti_referenti')
+          .delete()
+          .eq('cliente_id', clienteId);
+        
+        if (errorDelete) console.warn("Nota: Impossibile pulire referenti precedenti:", errorDelete.message);
+
+        // 6. Inserimento nuovi Referenti
+        if (referenti.length > 0) {
+          const referentiDaSalvare = referenti.map(r => ({
+            nome: r.nome || '',
+            cognome: r.cognome || '',
+            email: r.email || '',
+            telefono_fisso: r.telefono_fisso || '',
+            telefono_cellulare: r.telefono_cellulare || '', // Nome campo corretto
+            cliente_id: clienteId,
+            agente_id: finalAgenteId
+          }));
+
+          const { error: errorInsertRef } = await supabase
+            .from('clienti_referenti')
+            .insert(referentiDaSalvare);
+
+          if (errorInsertRef) {
+            // Se fallisce qui con 403, il problema è la policy INSERT
+            throw new Error(`Errore Referenti (403/Forbidden): ${errorInsertRef.message}`);
+          }
+        }
+
+        // Successo: torna alla lista e rinfresca i dati
+        setView('list');
+        fetchClienti();
       }
-      setView('list');
-      fetchClienti();
+    } catch (err) {
+      console.error("Errore durante il salvataggio:", err);
+      alert(err.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const filteredClienti = clienti.filter(c => {
