@@ -340,23 +340,62 @@ export default function GestioneClienti() {
               </div>
             </section>
 
-            {/* 4. AMMINISTRAZIONE */}
+{/* 4. AMMINISTRAZIONE */}
             <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
               <div className="flex items-center gap-3 text-emerald-600 font-black uppercase text-xs tracking-widest border-b pb-4">
                 <CreditCard size={20} /> 4. Amministrazione e Fatturazione
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
+                  <label className="text-[10px] font-black text-slate-400 ml-2 uppercase">IBAN</label>
                   <input 
                     placeholder="IBAN" 
                     className={`w-full p-4 rounded-2xl font-mono font-bold outline-none uppercase border-2 transition-all ${!isIbanValid ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-transparent focus:border-blue-500'}`}
                     value={form.iban} 
-                    onChange={e => setForm({...form, iban: e.target.value.toUpperCase().replace(/\s/g, '')})} 
+                    onChange={e => setForm({...form, iband: e.target.value.toUpperCase().replace(/\s/g, '')})} 
                   />
                   {!isIbanValid && <p className="text-[9px] text-red-500 font-black uppercase mt-1 ml-2">IBAN non valido</p>}
                 </div>
-                <input placeholder="Codice SDI" maxLength={7} className="p-4 bg-purple-50 text-purple-700 border border-purple-100 rounded-2xl font-black outline-none uppercase" value={form.sdi} onChange={e => setForm({...form, sdi: e.target.value.toUpperCase()})} />
-                <input placeholder="PEC" className="p-4 bg-purple-50 text-purple-700 border border-purple-100 rounded-2xl font-bold outline-none" value={form.pec} onChange={e => setForm({...form, pec: e.target.value.toLowerCase()})} />
+
+                {/* NUOVI CAMPI RICHIESTI */}
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 ml-2 uppercase">Banca</label>
+                  <input placeholder="Nome Istituto Bancario" className="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-emerald-500" value={form.banca} onChange={e => setForm({...form, banca: e.target.value})} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 ml-2 uppercase">Intestatario Conto</label>
+                  <input placeholder="Nome/Ragione Sociale Intestatario" className="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-emerald-500" value={form.intestatario_conto} onChange={e => setForm({...form, intestatario_conto: e.target.value})} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 ml-2 uppercase">Tipologia Intestatario</label>
+                  <select className="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-emerald-500" value={form.tipologia_intestatario} onChange={e => setForm({...form, tipologia_intestatario: e.target.value})}>
+                    <option value="Partita IVA">Partita IVA</option>
+                    <option value="Persona Fisica">Persona Fisica</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 ml-2 uppercase">Codice SDI</label>
+                  <input placeholder="Codice SDI" maxLength={7} className="w-full p-4 bg-purple-50 text-purple-700 border border-purple-100 rounded-2xl font-black outline-none uppercase" value={form.sdi} onChange={e => setForm({...form, sdi: e.target.value.toUpperCase()})} />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-[10px] font-black text-slate-400 ml-2 uppercase">PEC</label>
+                  <input placeholder="Indirizzo PEC" className="w-full p-4 bg-purple-50 text-purple-700 border border-purple-100 rounded-2xl font-bold outline-none" value={form.pec} onChange={e => setForm({...form, pec: e.target.value.toLowerCase()})} />
+                </div>
+
+                {/* SEZIONE DEBITORE (se diverso) */}
+                <div className="md:col-span-2 pt-4 border-t border-slate-50">
+                  <p className="text-[10px] font-black text-slate-400 uppercase mb-4">Dati Debitore (se differente da intestatario)</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 ml-2 uppercase">Nome e Cognome Debitore</label>
+                      <input placeholder="Dati Debitore" className="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-emerald-500" value={form.debitore_nome_cognome} onChange={e => setForm({...form, debitore_nome_cognome: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 ml-2 uppercase">Codice Fiscale Debitore</label>
+                      <input placeholder="Codice Fiscale" maxLength={16} className="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-emerald-500 uppercase" value={form.debitore_cf} onChange={e => setForm({...form, debitore_cf: e.target.value.toUpperCase()})} />
+                    </div>
+                  </div>
+                </div>
               </div>
             </section>
 
