@@ -1,4 +1,4 @@
-import { Edit2 } from 'lucide-react';
+import { Edit2, Calendar } from 'lucide-react';
 
 export default function ContrattiTable({ contratti, userProfile, onEdit }) {
   const getStatoStyle = (stato) => {
@@ -9,6 +9,12 @@ export default function ContrattiTable({ contratti, userProfile, onEdit }) {
       case 'Annullato': return 'bg-slate-100 text-slate-500 border-slate-200';
       default: return 'bg-blue-100 text-blue-700 border-blue-200';
     }
+  };
+
+  // Funzione per formattare la data in modo leggibile (opzionale)
+  const formatDate = (dateString) => {
+    if (!dateString) return '---';
+    return dateString.split('-').reverse().join('/');
   };
 
   return (
@@ -29,10 +35,15 @@ export default function ContrattiTable({ contratti, userProfile, onEdit }) {
             contratti.map(c => (
               <tr key={c.id} className="hover:bg-slate-50/50 transition-colors group">
                 <td className="p-6 font-black text-slate-900">{c.tipo}</td>
-                <td className="p-6 font-bold text-slate-800 uppercase text-sm">{c.clienti?.ragione_sociale}</td>
+                <td className="p-6">
+                  <div className="flex flex-col">
+                    <span className="font-bold text-slate-800 uppercase text-sm">{c.clienti?.ragione_sociale || 'Cliente rimosso'}</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">ID: {c.id.substring(0, 8)}</span>
+                  </div>
+                </td>
                 {userProfile?.role === 'admin' && (
                   <td className="p-6 text-xs font-bold uppercase text-blue-600">
-                    {c.profiles?.cognome} {c.profiles?.nome}
+                    {c.profiles ? `${c.profiles.cognome} ${c.profiles.nome}` : 'Non assegnato'}
                   </td>
                 )}
                 <td className="p-6">
@@ -40,9 +51,18 @@ export default function ContrattiTable({ contratti, userProfile, onEdit }) {
                     {c.stato}
                   </span>
                 </td>
-                <td className="p-6 text-slate-400 font-bold">{c.data_firma}</td>
+                <td className="p-6 text-slate-500 font-bold text-xs">
+                  <div className="flex items-center gap-2">
+                    <Calendar size={12} className="text-slate-300" />
+                    {formatDate(c.data_firma)}
+                  </div>
+                </td>
                 <td className="p-6 text-right">
-                  <button onClick={() => onEdit(c)} className="text-slate-300 hover:text-blue-600 transition-colors">
+                  <button 
+                    onClick={() => onEdit(c)} 
+                    className="p-3 bg-slate-50 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all active:scale-90"
+                    title="Modifica Contratto"
+                  >
                     <Edit2 size={18}/>
                   </button>
                 </td>
@@ -50,8 +70,13 @@ export default function ContrattiTable({ contratti, userProfile, onEdit }) {
             ))
           ) : (
             <tr>
-              <td colSpan={6} className="p-20 text-center text-slate-300 font-black uppercase tracking-widest">
-                Nessun contratto trovato
+              <td colSpan={userProfile?.role === 'admin' ? 6 : 5} className="p-20 text-center">
+                <div className="flex flex-col items-center gap-2">
+                   <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-200">
+                      <Edit2 size={24} />
+                   </div>
+                   <span className="text-slate-300 font-black uppercase tracking-widest text-xs">Nessun contratto trovato</span>
+                </div>
               </td>
             </tr>
           )}

@@ -31,34 +31,24 @@ export default function Contratti() {
   const [suggerimenti, setSuggerimenti] = useState([]);
   const [referentiCliente, setReferentiCliente] = useState([]);
 
-  const [form, setForm] = useState({
+  const initialFormState = {
     cliente_id: '', 
     agente_id: '', 
     tipo: 'A1', 
     stato: 'Bozza',
-    // Referente selezionato
     ref_nome: '', ref_cognome: '', ref_email: '', ref_telefono: '', ref_cellulare: '',
-    // Sede Legale
     via: '', civico: '', localita: '', provincia: '', cap: '',
-    // Rappresentanza e Segnalazione
-    rappresentante_nome: '', 
-    rappresentante_cognome: '', 
+    rappresentante_nome: '', rappresentante_cognome: '', 
     segnalatore_nome_cognome: '',
     codice_altuofianco: '',
-    // Amministrazione
-    iban: '', 
-    banca: '', 
-    intestatario_conto: '', 
-    tipologia_intestatario: 'Partita IVA',
-    debitore_nome_cognome: '', 
-    debitore_cf: '', 
-    sdi: '', 
-    pec: '',
-    // Date e Firma
+    iban: '', banca: '', intestatario_conto: '', tipologia_intestatario: 'Partita IVA',
+    debitore_nome_cognome: '', debitore_cf: '', sdi: '', pec: '',
     data_firma: new Date().toISOString().split('T')[0], 
     luogo_firma: '', 
     data_esito: ''
-  });
+  };
+
+  const [form, setForm] = useState(initialFormState);
 
   // --- LOGICA INIZIALE ---
   useEffect(() => { init(); }, []);
@@ -92,24 +82,13 @@ export default function Contratti() {
     setContratti(data || []);
   }
 
-  // Trigger filtri con debounce
   useEffect(() => {
     const t = setTimeout(() => fetchContratti(), 300);
     return () => clearTimeout(t);
   }, [filtri]);
 
-  // Suggerimenti filtro ragione sociale
-  useEffect(() => {
-    if (filtri.ragione_sociale.length > 1) {
-      supabase.from('clienti').select('ragione_sociale').ilike('ragione_sociale', `%${filtri.ragione_sociale}%`).limit(5)
-        .then(({data}) => setSuggerimentiFiltro(data || []));
-    } else setSuggerimentiFiltro([]);
-  }, [filtri.ragione_sociale]);
-
-  // Suggerimenti Form Cliente
   useEffect(() => {
     if (searchQuery.length > 1 && !form.cliente_id) {
-      // Usiamo select('*') per essere certi di scaricare tutti i nuovi campi (debitore, banca, ecc.)
       supabase.from('clienti').select('*').ilike('ragione_sociale', `%${searchQuery}%`).limit(5)
         .then(({data}) => setSuggerimenti(data || []));
     } else setSuggerimenti([]);
@@ -142,36 +121,48 @@ export default function Contratti() {
     setReferentiCliente(refs || []);
   };
 
-const salvaContratto = async (e) => {
-  if (e) e.preventDefault();
-  setLoading(true);
-
-  // 1. Estraiamo dall'oggetto form le proprietà che NON sono colonne reali della tabella contratti
-  // 'clienti' e 'profiles' sono i join caricati dalla fetch
-  const { clienti, profiles, ...datiPuliti } = form;
-
-  // 2. Prepariamo il payload finale
-  const payload = {
-    ...datiPuliti,
-    agente_id: form.agente_id || userProfile.id,
-    // Gestione date vuote per evitare errori di sintassi date
-    data_firma: form.data_firma || null,
-    data_esito: form.data_esito || null
+  const handleEdit = async (c) => {
+    setForm(c); 
+    setSearchQuery(c.clienti?.ragione_sociale || '');
+    setIsEdit(true); 
+    
+    // Recupero referenti per popolare la select nel form durante la modifica
+    if (c.cliente_id) {
+      const { data: refs } = await supabase.from('clienti_referenti').select('*').eq('cliente_id', c.cliente_id);
+      setReferentiCliente(refs || []);
+    } else {
+      setReferentiCliente([]);
+    }
+    
+    setView('form'); 
   };
 
-  const { error } = await supabase
-    .from('contratti')
-    .upsert(payload);
+  const salvaContratto = async (e) => {
+    if (e) e.preventDefault();
+    setLoading(true);
 
-  if (error) {
-    console.error("Errore salvataggio:", error);
-    alert("Errore: " + error.message);
-  } else { 
-    setView('list'); 
-    fetchContratti(); 
-  }
-  setLoading(false);
-};
+    // 1. Pulizia oggetti join per evitare errore 400 (PGRST204)
+    const { clienti, profiles, ...datiPuliti } = form;
+
+    // 2. Normalizzazione date e campi obbligatori
+    const payload = {
+      ...datiPuliti,
+      agente_id: form.agente_id || userProfile.id,
+      data_firma: form.data_firma || null,
+      data_esito: form.data_esito || null
+    };
+
+    const { error } = await supabase.from('contratti').upsert(payload);
+
+    if (error) {
+      console.error("Errore salvataggio:", error);
+      alert("Errore durante il salvataggio: " + error.message);
+    } else { 
+      setView('list'); 
+      fetchContratti(); 
+    }
+    setLoading(false);
+  };
 
   return (
     <div className="flex bg-slate-50 min-h-screen">
@@ -186,7 +177,13 @@ const salvaContratto = async (e) => {
                 <p className="text-slate-400 text-sm font-bold uppercase tracking-widest mt-1">Archivio contratti e pratiche</p>
               </div>
               <button 
-                onClick={() => { setView('form'); setIsEdit(false); setSearchQuery(''); setForm({...form, cliente_id: ''}); }} 
+                onClick={() => { 
+                  setView('form'); 
+                  setIsEdit(false); 
+                  setSearchQuery(''); 
+                  setForm(initialFormState);
+                  setReferentiCliente([]);
+                }} 
                 className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 shadow-xl hover:bg-blue-700 uppercase text-xs transition-all active:scale-95"
               >
                 <Plus size={18} /> Nuovo Contratto
@@ -205,12 +202,7 @@ const salvaContratto = async (e) => {
             <ContrattiTable 
               contratti={contratti} 
               userProfile={userProfile} 
-              onEdit={(c) => { 
-                setForm(c); 
-                setSearchQuery(c.clienti?.ragione_sociale || '');
-                setIsEdit(true); 
-                setView('form'); 
-              }} 
+              onEdit={handleEdit} 
             />
           </>
         ) : (
@@ -231,13 +223,12 @@ const salvaContratto = async (e) => {
           />
         )}
 
-        {/* MODAL REFERENTE */}
         {showRefModal && (
           <ModalReferente 
             clienteId={form.cliente_id} 
             onClose={() => setShowRefModal(false)} 
             onSuccess={(r) => { 
-                setReferentiCliente([...referentiCliente, r]); 
+                setReferentiCliente(prev => [...prev, r]); 
                 setForm({
                   ...form, 
                   ref_nome: r.nome, 
