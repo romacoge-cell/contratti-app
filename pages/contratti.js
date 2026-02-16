@@ -142,27 +142,32 @@ export default function Contratti() {
     setReferentiCliente(refs || []);
   };
 
-  const salvaContratto = async (e) => {
-    if (e) e.preventDefault();
-    setLoading(true);
-    
-    // Inserisce o aggiorna il contratto con tutti i campi presenti nello stato 'form'
-    const { error } = await supabase
-      .from('contratti')
-      .upsert({ 
-        ...form, 
-        agente_id: form.agente_id || userProfile.id 
-      });
+const salvaContratto = async (e) => {
+  if (e) e.preventDefault();
+  setLoading(true);
 
-    if (error) {
-      console.error("Errore salvataggio:", error);
-      alert(error.message);
-    } else { 
-      setView('list'); 
-      fetchContratti(); 
-    }
-    setLoading(false);
+  // Prepariamo i dati per il salvataggio
+  const payload = {
+    ...form,
+    agente_id: form.agente_id || userProfile.id,
+    // Se la stringa è vuota, inviamo null, altrimenti la data inserita
+    data_firma: form.data_firma || null,
+    data_esito: form.data_esito || null
   };
+
+  const { error } = await supabase
+    .from('contratti')
+    .upsert(payload);
+
+  if (error) {
+    console.error("Errore salvataggio:", error);
+    alert("Errore: " + error.message);
+  } else { 
+    setView('list'); 
+    fetchContratti(); 
+  }
+  setLoading(false);
+};
 
   return (
     <div className="flex bg-slate-50 min-h-screen">
