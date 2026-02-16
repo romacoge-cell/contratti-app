@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import Navbar from '../components/Navbar';
-import { Plus, Edit2, Settings, Loader2, X } from 'lucide-react';
+import { Plus, Edit2, Settings, Loader2, X, Check } from 'lucide-react';
 
 export default function Tipologie() {
   const [tipologie, setTipologie] = useState([]);
@@ -10,7 +10,11 @@ export default function Tipologie() {
   const [isEdit, setIsEdit] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   
-  const [currentTipologia, setCurrentTipologia] = useState({ id: null, tipologia: '' });
+  const [currentTipologia, setCurrentTipologia] = useState({ 
+    id: null, 
+    tipologia: '', 
+    tipo_contratto: 'A1' 
+  });
 
   useEffect(() => {
     checkAdmin();
@@ -37,7 +41,10 @@ export default function Tipologie() {
     e.preventDefault();
     if (!currentTipologia.tipologia) return;
 
-    const payload = { tipologia: currentTipologia.tipologia };
+    const payload = { 
+        tipologia: currentTipologia.tipologia,
+        tipo_contratto: currentTipologia.tipo_contratto 
+    };
     
     let error;
     if (isEdit) {
@@ -52,7 +59,7 @@ export default function Tipologie() {
       alert(error.message);
     } else {
       setShowModal(false);
-      setCurrentTipologia({ id: null, tipologia: '' });
+      setCurrentTipologia({ id: null, tipologia: '', tipo_contratto: 'A1' });
       fetchTipologie();
     }
   }
@@ -65,7 +72,7 @@ export default function Tipologie() {
 
   const apriNuovo = () => {
     setIsEdit(false);
-    setCurrentTipologia({ id: null, tipologia: '' });
+    setCurrentTipologia({ id: null, tipologia: '', tipo_contratto: 'A1' });
     setShowModal(true);
   };
 
@@ -81,7 +88,7 @@ export default function Tipologie() {
             <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
               <Settings className="text-blue-600" size={28} /> Tipologie
             </h1>
-            <p className="text-slate-400 text-sm font-bold uppercase tracking-widest mt-1">Gestione categorie prodotti</p>
+            <p className="text-slate-400 text-sm font-bold uppercase tracking-widest mt-1">Gestione categorie e flussi contratto</p>
           </div>
           <button 
             onClick={apriNuovo}
@@ -99,7 +106,7 @@ export default function Tipologie() {
               <thead className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase border-b border-slate-100 tracking-widest">
                 <tr>
                   <th className="p-6">Nome Tipologia</th>
-                  <th className="p-6">Data Creazione</th>
+                  <th className="p-6">Tipo Contratto</th>
                   <th className="p-6 text-right">Azioni</th>
                 </tr>
               </thead>
@@ -108,8 +115,10 @@ export default function Tipologie() {
                   tipologie.map(t => (
                     <tr key={t.id} className="hover:bg-slate-50/50 transition-colors group">
                       <td className="p-6 font-black text-slate-900 uppercase tracking-tight">{t.tipologia}</td>
-                      <td className="p-6 text-slate-400 font-bold text-xs">
-                        {new Date(t.created_at).toLocaleDateString()}
+                      <td className="p-6">
+                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${t.tipo_contratto === 'A1' ? 'bg-orange-100 text-orange-600' : 'bg-purple-100 text-purple-600'}`}>
+                          {t.tipo_contratto}
+                        </span>
                       </td>
                       <td className="p-6 text-right">
                         <button 
@@ -147,6 +156,23 @@ export default function Tipologie() {
               </div>
               
               <form onSubmit={salvaTipologia} className="space-y-6">
+                {/* TIPO CONTRATTO SELECTOR */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 ml-2">Tipo Contratto</label>
+                  <div className="flex gap-2 p-1.5 bg-slate-50 rounded-2xl">
+                    {['A1', 'A2'].map((tipo) => (
+                      <button
+                        key={tipo}
+                        type="button"
+                        onClick={() => setCurrentTipologia({...currentTipologia, tipo_contratto: tipo})}
+                        className={`flex-1 py-3 rounded-xl font-black text-xs transition-all ${currentTipologia.tipo_contratto === tipo ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        {tipo}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 ml-2">Nome della tipologia</label>
                   <input 
@@ -157,6 +183,7 @@ export default function Tipologie() {
                     placeholder="es. ENERGIA"
                   />
                 </div>
+
                 <button 
                   type="submit"
                   className="w-full bg-blue-600 text-white p-5 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95"
