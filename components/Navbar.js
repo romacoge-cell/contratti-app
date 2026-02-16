@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { Users, FileText, LogOut, LayoutDashboard, UserSquare2 } from 'lucide-react';
+// Aggiunta l'icona Settings per Tipologie
+import { Users, FileText, LogOut, LayoutDashboard, UserSquare2, Settings } from 'lucide-react';
 import { useRouter } from 'next/router';
 
 export default function Navbar() {
@@ -46,9 +47,16 @@ export default function Navbar() {
         </a>
 
         {role === 'admin' && (
-          <a href="/admin/agenti" className="flex items-center gap-3 p-4 hover:bg-slate-800 rounded-2xl transition-all text-slate-300 hover:text-white group">
-            <Users size={20} className="group-hover:text-blue-400" /> Agenti
-          </a>
+          <>
+            <a href="/admin/agenti" className="flex items-center gap-3 p-4 hover:bg-slate-800 rounded-2xl transition-all text-slate-300 hover:text-white group">
+              <Users size={20} className="group-hover:text-blue-400" /> Agenti
+            </a>
+            
+            {/* NUOVA VOCE TIPOLOGIE */}
+            <a href="/tipologie" className="flex items-center gap-3 p-4 hover:bg-slate-800 rounded-2xl transition-all text-slate-300 hover:text-white group">
+              <Settings size={20} className="group-hover:text-blue-400" /> Tipologie
+            </a>
+          </>
         )}
 
         <a href="/clienti" className="flex items-center gap-3 p-4 hover:bg-slate-800 rounded-2xl transition-all text-slate-300 hover:text-white group">
